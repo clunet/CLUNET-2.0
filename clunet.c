@@ -165,7 +165,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 						/* Иначе передача всех данных закончена */
 						else
 						{
-							clunetSendingState++;		// переходим к следующей фазе завершения передачи пакета
+							clunetSendingState = CLUNET_SENDING_STOP;
 							numBits++;
 							break;
 						}
@@ -244,6 +244,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 								break;
 							}
 						}
+						break;
 					}
 				}
 
