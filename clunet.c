@@ -134,7 +134,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	else
 	{
 		/* Переменная количества передаваемых бит (сколько периодов Т задержка при следующем вызове прерывания) */
-		uint8_t numBits = 0;
+		register uint8_t numBits = 0;
 
 		CLUNET_SEND_INVERT;	// Инвертируем значение сигнала
 	
@@ -260,7 +260,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 				}
 				// Иначе если была отпущена (последний бит 0), то сделаем короткий импульс 1Т
 				else
-					numBits = 1;
+					numBits++;
 
 		}
 
