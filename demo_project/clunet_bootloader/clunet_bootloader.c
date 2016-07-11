@@ -165,7 +165,7 @@ read()
 		do
 		{
 		
-			uint8_t data = wait_for_impulse();
+			data = wait_for_impulse();
 			
 			if (data)
 			{
