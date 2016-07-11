@@ -107,8 +107,15 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
 
-	/* Если мы в ожидании освобождения линии, то начнем передачу через 1Т, предварительно сбросив статус чтения */
-	if (clunetSendingState == CLUNET_SENDING_WAITING_LINE)
+	// Если передатчик освободился, сбросим статус чтения и пока сюда не планируем возвращаться
+	if (clunetSendingState == CLUNET_SENDING_IDLE)
+	{
+		clunetReadingState = CLUNET_READING_IDLE;
+		CLUNET_DISABLE_TIMER_COMP;
+	}
+
+	/* А если мы в ожидании освобождения линии, то начнем передачу через 1Т, предварительно сбросив статус чтения */
+	else if (clunetSendingState == CLUNET_SENDING_WAITING_LINE)
 	{
 		clunetReadingState = CLUNET_READING_IDLE;
 		clunetSendingState = CLUNET_SENDING_INIT;
@@ -116,12 +123,8 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		return;
 	}
 
-	/* Если мы закончили передачу, то освободим передатчик, а условие ниже, сделает все необходимое */
-	if (clunetSendingState == CLUNET_SENDING_DONE)
-		clunetSendingState = CLUNET_SENDING_IDLE;	// Указываем, что передатчик свободен
-	
-	/* Иначе если передачу необходимо продолжить, то сначала проверим на конфликт */
-	else if (!CLUNET_SENDING && CLUNET_READING)
+	/* Проверим на конфликт */
+	if (!CLUNET_SENDING && CLUNET_READING)
 	{
 		CLUNET_DISABLE_TIMER_COMP;					// Выключаем прерывание сравнения таймера
 		clunetSendingState = CLUNET_SENDING_WAITING_LINE;		// Переходим в режим ожидания линии
@@ -248,13 +251,14 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 
 			case CLUNET_SENDING_STOP:
 				
-				// Если линия была прижата (последний бит 1), то просто отпускаем и освобождаем передатчик через 7Т
+				// Если линия была прижата (последний бит 1), то просто отпускаем, во внешнем прерывании запланируются необходимые действия
 				if (!CLUNET_SENDING)
 				{
-					numBits = 7;
-					clunetSendingState++;
+					CLUNET_DISABLE_TIMER_COMP;
+					clunetSendingState = CLUNET_SENDING_IDLE;
+					return;
 				}
-				// Иначе если была отпущена (последний бит 0), то сделаем короткий импульс 1Т, после которого освободим передатчик через 7Т
+				// Иначе если была отпущена (последний бит 0), то сделаем короткий импульс 1Т
 				else
 					numBits = 1;
 
@@ -262,13 +266,6 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 
 		CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
 
-	}
-
-	// Если передатчик освободился, сбросим статус чтения и пока сюда не планируем возвращаться
-	if (clunetSendingState == CLUNET_SENDING_IDLE)
-	{
-		clunetReadingState = CLUNET_READING_IDLE;
-		CLUNET_DISABLE_TIMER_COMP;
 	}
 
 }
