@@ -283,7 +283,7 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 	if (size < (CLUNET_SEND_BUFFER_SIZE - CLUNET_OFFSET_DATA))
 	{
 		/* Прерываем текущую передачу, если есть такая */
-		if (clunetSendingState)
+		if (clunetSendingState & 7)
 		{
 			CLUNET_DISABLE_TIMER_COMP;
 			CLUNET_SEND_0;
