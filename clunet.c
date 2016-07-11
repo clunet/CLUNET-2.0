@@ -283,7 +283,6 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 	if (size < (CLUNET_SEND_BUFFER_SIZE - CLUNET_OFFSET_DATA))
 	{
 		CLUNET_DISABLE_TIMER_COMP;
-		clunetSendingState = CLUNET_SENDING_WAITING_LINE;
 
 		/* Заполняем переменные */
 		clunetCurrentPrio = (prio > 8) ? 8 : prio ? : 1;	// Ограничим приоритет диапазоном (1 ; 8)
@@ -302,7 +301,10 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 		
 		clunetSendingDataLength = size + (CLUNET_OFFSET_DATA + 1);
 
-		// Если линия зажата, то отожмем линию, а процедура внешнего прерывания запланирует отправку сама
+
+		clunetSendingState = CLUNET_SENDING_WAITING_LINE;	// Ждем линию
+
+		// Если линия прижата, то отожмем и процедура внешнего прерывания запланирует отправку сама
 		if (CLUNET_READING)
 			CLUNET_SEND_0;
 		// Если свободна, то запланируем отправку сами
