@@ -320,7 +320,7 @@ ISR(CLUNET_INT_VECTOR)
 
 	uint8_t down = (CLUNET_READING);
 
-	uint8_t bitNum = 0;
+	register uint8_t bitNum = 0;
 
 	if (clunetReadingState)
 	{
@@ -377,7 +377,7 @@ ISR(CLUNET_INT_VECTOR)
 		if (clunetReadingState == CLUNET_READING_IDLE)
 		{
 			clunetReadingState++;
-			clunetReadingByteIndex = clunetReadingBitIndex = 0;
+			clunetReadingBitStuff = clunetReadingByteIndex = clunetReadingBitIndex = 0;
 			return;
 		}
 
