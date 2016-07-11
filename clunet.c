@@ -37,9 +37,13 @@ static volatile char dataToRead[CLUNET_READ_BUFFER_SIZE];
 static inline void
 clunet_read_rst_send()
 {
-	// подождем 7Т, сбросим статус чтения на готов, потом при необходимости через 1Т запустим передачу
-	CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7*CLUNET_T);
-	CLUNET_ENABLE_TIMER_COMP;	// Включаем прерывание сравнения таймера
+	/* Если состояние передачи неактивно либо в ожидании, то запланируем сброс чтения и при необходимости начало передачи */
+	if (!(clunetSendingState & 7))
+	{
+		/* подождем 7Т, сбросим статус чтения, потом, при необходимости, через 1Т запустим передачу в прерывании сравнения */
+		CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7*CLUNET_T);
+		CLUNET_ENABLE_TIMER_COMP;	// Включаем прерывание сравнения таймера
+	}
 }
 
 static inline char
