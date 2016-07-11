@@ -326,7 +326,7 @@ ISR(CLUNET_INT_VECTOR)
 	{
 
 		uint8_t ticks = clunetTimerStart - now;
-
+		
 		if (ticks < CLUNET_READ1)
 			bitNum = 1;
 		else if (ticks < CLUNET_READ2)
@@ -380,12 +380,10 @@ ISR(CLUNET_INT_VECTOR)
 			clunetReadingBitStuff = clunetReadingByteIndex = clunetReadingBitIndex = 0;
 			return;
 		}
-
 	}
 	else
 	{
 		clunet_read_rst_send();
-
 		clunetSyncBits = bitNum;	// Сохраняем количество прочитанных бит после синхронизации
 	}
 
@@ -394,22 +392,23 @@ ISR(CLUNET_INT_VECTOR)
 		/* Главная фаза чтения данных! */
 		case CLUNET_READING_DATA:
 
+			/* Если линию прижало, значит были нулевая посылка - сбросим соответствующие биты */
 			if (down)
 				dataToRead[clunetReadingByteIndex] &= ~(255 >> clunetReadingBitIndex);
+
+			/* Иначе если линию отжало, значит были единичная посылка - установим соответствующие биты */
 			else
 				dataToRead[clunetReadingByteIndex] |= (255 >> clunetReadingBitIndex);
 
+			// Обновим битовый индекс с учетом битстаффинга
 			clunetReadingBitIndex += (bitNum - clunetReadingBitStuff);
 
 			if (clunetReadingBitIndex & 8)
 			{
-
-				/* Проверка на окончание чтения пакета */
+				/* Если пакет прочитан полностью, то проверим контрольную сумму */
 				if ((++clunetReadingByteIndex > CLUNET_OFFSET_SIZE) && (clunetReadingByteIndex > dataToRead[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
 				{
-
 					clunetReadingState = CLUNET_READING_IDLE;
-
 					/* Проверяем CRC, при успехе начнем обработку принятого пакета */
 					if (!check_crc((char*)dataToRead, clunetReadingByteIndex))
 						clunet_data_received (
@@ -422,14 +421,14 @@ ISR(CLUNET_INT_VECTOR)
 
 				}
 
-				/* Если данные прочитаны не все и не выходим за пределы буфера, то сбросим очередной байт и подготовим битовый индекс */
+				/* Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс */
 				else if (clunetReadingByteIndex < CLUNET_READ_BUFFER_SIZE)
 				{
 					clunetReadingBitIndex &= 7;
 					dataToRead[clunetReadingByteIndex] = (down) ? 0 : 0xFF;
 				}
 
-				/* Иначе - нехватка приемного буфера -> игнорируем пакет */
+				/* Иначе ошибка: нехватка приемного буфера -> игнорируем пакет */
 				else
 					clunetReadingState = CLUNET_READING_ERROR;
 
@@ -442,7 +441,7 @@ ISR(CLUNET_INT_VECTOR)
 			
 			clunetReadingBitIndex += bitNum;
 
-			// Если прочитаны биты начала кадра (1-ый стартовый, 2-5 приоритет)
+			// Если прочитаны биты начала кадра (1-ый стартовый, 2-4 приоритет)
 			if (clunetReadingBitIndex >= 4)
 			{
 				clunetReadingBitIndex -= 4;		// Коррекция индекса чтения бита
@@ -450,19 +449,10 @@ ISR(CLUNET_INT_VECTOR)
 				dataToRead[0] = (down) ? 0 : 0xFF;
 			}
 
-			break;
-		
-		// Если в ожидании, то переходим к фазе начала приемки кадра и обнуляем счетчики
-		case CLUNET_READING_IDLE:
-
-			clunetReadingState++;
-			clunetReadingByteIndex = clunetReadingBitIndex = 0;
-
 	}
 
 	/* Проверка на битстаффинг, учитываем в следующем цикле */
 	clunetReadingBitStuff = (bitNum == 5);
-
 }
 
 void
