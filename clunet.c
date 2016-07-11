@@ -282,31 +282,8 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 	/* Если размер данных в пределах буфера передачи (максимально для протокола 250 байт) */
 	if (size < (CLUNET_SEND_BUFFER_SIZE - CLUNET_OFFSET_DATA))
 	{
-		/* Прерываем текущую передачу, если есть такая */
-		if (clunetSendingState & 7)
-		{
-			CLUNET_DISABLE_TIMER_COMP;
-			clunetSendingState = CLUNET_SENDING_WAITING_LINE;
-			// Если линия зажата, то отожмем линию, а процедура внешнего прерывания запланирует отправку сама
-			if (CLUNET_READING)
-				CLUNET_SEND_0;
-			// Если свободна, то запланируем отправку сами
-			else
-			{
-				CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7*CLUNET_T);
-				CLUNET_ENABLE_TIMER_COMP;
-			}
-		}
-		else
-		{
-			clunetSendingState = CLUNET_SENDING_WAITING_LINE;
-			// Если линия свободна, то запланируем передачу сразу
-			if (!CLUNET_READING)
-			{
-				CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7*CLUNET_T);
-				CLUNET_ENABLE_TIMER_COMP;
-			}
-		}
+		CLUNET_DISABLE_TIMER_COMP;
+		clunetSendingState = CLUNET_SENDING_WAITING_LINE;
 
 		/* Заполняем переменные */
 		clunetCurrentPrio = (prio > 8) ? 8 : prio ? : 1;	// Ограничим приоритет диапазоном (1 ; 8)
@@ -325,6 +302,15 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 		
 		clunetSendingDataLength = size + (CLUNET_OFFSET_DATA + 1);
 
+		// Если линия зажата, то отожмем линию, а процедура внешнего прерывания запланирует отправку сама
+		if (CLUNET_READING)
+			CLUNET_SEND_0;
+		// Если свободна, то запланируем отправку сами
+		else
+		{
+			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7*CLUNET_T);
+			CLUNET_ENABLE_TIMER_COMP;
+		}
 	}
 }
 
