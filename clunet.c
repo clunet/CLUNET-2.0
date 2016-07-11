@@ -107,27 +107,30 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
 
+	/* Если мы в ожидании освобождения линии, то начнем передачу через 1Т, предварительно сбросив статус чтения */
 	if (clunetSendingState == CLUNET_SENDING_WAITING_LINE)
 	{
 		clunetReadingState = CLUNET_READING_IDLE;
 		clunetSendingState = CLUNET_SENDING_INIT;
 		CLUNET_TIMER_REG_OCR += CLUNET_T;
+		return;
 	}
 
-	else if (clunetSendingState == CLUNET_SENDING_DONE)
-		clunetSendingState = CLUNET_SENDING_IDLE;		// Указываем, что передатчик свободен
+	/* Если мы закончили передачу, то освободим передатчик, а условие ниже, сделает все необходимое */
+	if (clunetSendingState == CLUNET_SENDING_DONE)
+		clunetSendingState = CLUNET_SENDING_IDLE;	// Указываем, что передатчик свободен
 	
 	/* Иначе если передачу необходимо продолжить, то сначала проверим на конфликт */
 	else if (!CLUNET_SENDING && CLUNET_READING)
 	{
-		CLUNET_DISABLE_TIMER_COMP;								// Выключаем прерывание сравнения таймера (передачу)
+		CLUNET_DISABLE_TIMER_COMP;					// Выключаем прерывание сравнения таймера
 		clunetSendingState = CLUNET_SENDING_WAITING_LINE;		// Переходим в режим ожидания линии
 	}
 
 	/* Все в порядке, можем продолжать */
 	else
 	{
-
+		/* Переменная количества передаваемых бит (сколько периодов Т задержка при следующем вызове прерывания) */
 		uint8_t numBits = 0;
 
 		CLUNET_SEND_INVERT;	// Инвертируем значение сигнала
@@ -135,7 +138,6 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		/* Смотрим фазу передачи */
 		switch (clunetSendingState)
 		{
-		
 			// Главная фаза передачи данных!
 			case CLUNET_SENDING_DATA:
 			
@@ -167,6 +169,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 
 					}
 
+					/* Если будем отправлять 5 одноименных бит, то запланируем битстаффинг в следующей передаче */
 					if (++numBits == 5)
 					{
 						clunetSendingBitStuff = 1;
@@ -180,34 +183,21 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 			// Фаза отправки стартового бита, а также битов приоритета, старшего бита данных при условии их равенства единице
 			case CLUNET_SENDING_INIT:
 
-				numBits = 1;
-
 				clunetSendingBitStuff = clunetSendingByteIndex = clunetSendingBitIndex = 0;
 				
 				uint8_t prio = clunetCurrentPrio - 1;
 
-				while((prio << ++clunetSendingBitIndex) & 8)
-					numBits++;
-				
+				/* Считаем сколько бит в приоритете единичных, учитывая стоповый */
+				while((prio << ++numBits) & 8);
+
 				// Если отправлены все биты приоритета
-				if(clunetSendingBitIndex & 4)
+				if(numBits & 4)
+					clunetSendingState = CLUNET_SENDING_DATA;	// Перепрыгнем стадию отправки приоритета
+				else
 				{
-
-					// Если старший бит данных - единица, то отошлем его, увеличим индекс бита и установим признак отправки битстаффинга
-					if (dataToSend[0] & 0x80)
-					{
-						numBits++;
-						clunetSendingBitIndex++;
-						clunetSendingBitStuff = 1;
-					}
-
-					clunetSendingBitIndex -= 4;
-					clunetSendingState++;		// Перепрыгнем стадию отправки приоритета
-
+					clunetSendingState = CLUNET_SENDING_PRIO;	// К следующей фазе
+					clunetSendingBitIndex = numBits;		// Запомним на каком бите приоритета остановились
 				}
-
-
-				clunetSendingState++;						// К следующей фазе
 
 				break;
 
@@ -266,10 +256,11 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 
 	}
 
-	if (!clunetSendingState)
+	// Если передатчик освободился, сбросим статус чтения и пока сюда не планируем возвращаться
+	if (clunetSendingState == CLUNET_SENDING_IDLE)
 	{
 		clunetReadingState = CLUNET_READING_IDLE;
-		CLUNET_DISABLE_TIMER_COMP;						// Выключаем прерывание сравнения таймера
+		CLUNET_DISABLE_TIMER_COMP;
 	}
 
 }
