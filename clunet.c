@@ -287,6 +287,7 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 		{
 			CLUNET_DISABLE_TIMER_COMP;
 			CLUNET_SEND_0;
+			clunetSendingState = 0;
 		}
 
 		/* Заполняем переменные */
