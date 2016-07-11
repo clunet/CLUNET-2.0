@@ -286,8 +286,26 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 		if (clunetSendingState & 7)
 		{
 			CLUNET_DISABLE_TIMER_COMP;
-			CLUNET_SEND_0;
-			clunetSendingState = 0;
+			clunetSendingState = CLUNET_SENDING_WAITING_LINE;
+			// Если линия зажата, то отожмем линию, а процедура внешнего прерывания запланирует отправку сама
+			if (CLUNET_READING)
+				CLUNET_SEND_0;
+			// Если свободна, то запланируем отправку сами
+			else
+			{
+				CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7*CLUNET_T);
+				CLUNET_ENABLE_TIMER_COMP;
+			}
+		}
+		else
+		{
+			clunetSendingState = CLUNET_SENDING_WAITING_LINE;
+			// Если линия свободна, то запланируем передачу сразу
+			if (!CLUNET_READING)
+			{
+				CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7*CLUNET_T);
+				CLUNET_ENABLE_TIMER_COMP;
+			}
 		}
 
 		/* Заполняем переменные */
@@ -306,13 +324,6 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 		dataToSend[CLUNET_OFFSET_DATA + size] = check_crc((char*)dataToSend, CLUNET_OFFSET_DATA + size);
 		
 		clunetSendingDataLength = size + (CLUNET_OFFSET_DATA + 1);
-
-		// Если линия свободна, то запланируем передачу сразу
-		if (!CLUNET_READING)
-			clunet_read_rst_send();
-		// Иначе будем ожидать когда освободится в процедуре внешнего прерывания
-		else
-			clunetSendingState = CLUNET_SENDING_WAITING_LINE;
 
 	}
 }
