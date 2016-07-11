@@ -8,34 +8,30 @@
 #ifndef __clunet_h_included__
 #define __clunet_h_included__
 
+#include <stdint.h>
 #include "bits.h"
 #include "clunet_config.h"
 
-#define CLUNET_SENDING_STATE_IDLE 0
-#define CLUNET_SENDING_STATE_INIT 1
-#define CLUNET_SENDING_STATE_PRIO1 2
-#define CLUNET_SENDING_STATE_PRIO2 3
-#define CLUNET_SENDING_STATE_DATA 4
-#define CLUNET_SENDING_STATE_WAITING_LINE 6
-#define CLUNET_SENDING_STATE_PREINIT 7
-#define CLUNET_SENDING_STATE_STOP 8
-#define CLUNET_SENDING_STATE_DONE 9
+#define CLUNET_SENDING_IDLE 0
+#define CLUNET_SENDING_INIT 1
+#define CLUNET_SENDING_PRIO 2
+#define CLUNET_SENDING_DATA 4
+#define CLUNET_SENDING_STOP 5
+#define CLUNET_SENDING_WAITING_LINE 8
 
-#define CLUNET_READING_STATE_IDLE 0
-#define CLUNET_READING_STATE_INIT 1
-#define CLUNET_READING_STATE_PRIO1 2
-#define CLUNET_READING_STATE_PRIO2 3
-#define CLUNET_READING_STATE_HEADER 4
-#define CLUNET_READING_STATE_DATA 5
+#define CLUNET_READING_IDLE 0
+#define CLUNET_READING_START 1
+#define CLUNET_READING_DATA 2
+#define CLUNET_READING_ERROR 8
 
 #define CLUNET_OFFSET_SRC_ADDRESS 0
 #define CLUNET_OFFSET_DST_ADDRESS 1
 #define CLUNET_OFFSET_COMMAND 2
 #define CLUNET_OFFSET_SIZE 3
 #define CLUNET_OFFSET_DATA 4
-#define CLUNET_BROADCAST_ADDRESS 0xFF
+#define CLUNET_BROADCAST_ADDRESS 255
 
-#define CLUNET_COMMAND_DISCOVERY 0x00
+#define CLUNET_COMMAND_DISCOVERY	0
 /* Поиск других устройств, параметров нет */
 
 #define CLUNET_COMMAND_DISCOVERY_RESPONSE 0x01
@@ -188,6 +184,18 @@
 #define CLUNET_1_T (3*CLUNET_T)
 #define CLUNET_INIT_T (10*CLUNET_T)
 
+#define CLUNET_READ1	(CLUNET_T + CLUNET_T/2)
+#define CLUNET_READ2	(2*CLUNET_T + CLUNET_T/2)
+#define CLUNET_READ3	(3*CLUNET_T + CLUNET_T/2)
+#define CLUNET_READ4	(4*CLUNET_T + CLUNET_T/2)
+#define CLUNET_READ5	(5*CLUNET_T + CLUNET_T/2)
+#define CLUNET_READ6	(6*CLUNET_T + CLUNET_T/2)
+#define CLUNET_READ7	(7*CLUNET_T + CLUNET_T/2)
+#define CLUNET_READ8	(8*CLUNET_T + CLUNET_T/2)
+#define CLUNET_READ9	(9*CLUNET_T + CLUNET_T/2)
+#define CLUNET_READ10	(10*CLUNET_T + CLUNET_T/2)
+
+
 #define CLUNET_CONCAT(a, b)            a ## b
 #define CLUNET_OUTPORT(name)           CLUNET_CONCAT(PORT, name)
 #define CLUNET_INPORT(name)            CLUNET_CONCAT(PIN, name)
@@ -226,19 +234,17 @@
 // Инициализация
 void clunet_init();
 
-// Отправка пакета
-void clunet_send(unsigned char address, unsigned char prio, unsigned char command, char* data, unsigned char size);
-
 // Возвращает 0, если готов к передаче, иначе приоритет текущей задачи
-int clunet_ready_to_send();
+uint8_t clunet_ready_to_send();
+
+// Отправка пакета
+void clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, const char* data, const uint8_t size);
 
 // Установка функций, которые вызываются при получении пакетов
 // Эта - получает пакеты, которые адресованы нам
-void clunet_set_on_data_received(void (*f)(unsigned char src_address, unsigned char dst_address, unsigned char command, char* data, unsigned char size));
+void clunet_set_on_data_received(void (*f)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size));
 
 // А эта - абсолютно все, которые ходят по сети, включая наши
-void clunet_set_on_data_received_sniff(void (*f)(unsigned char src_address, unsigned char dst_address, unsigned char command, char* data, unsigned char size));
-
-char check_crc(char* data, unsigned char size);
+void clunet_set_on_data_received_sniff(void (*f)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size));
 
 #endif

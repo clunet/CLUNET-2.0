@@ -162,7 +162,7 @@ read()
 
 		data -= 4;
 		
-		while(1)
+		do
 		{
 		
 			uint8_t data = wait_for_impulse();
@@ -198,14 +198,15 @@ read()
 			}
 			else return 0;
 		}
-		while((byteIndex < CLUNET_OFFSET_DATA) && (byteIndex <= buffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
-		/* Проверяем CRC, при успехе начнем обработку принятого пакета */
+		while((byteIndex < CLUNET_OFFSET_DATA) && (byteIndex <= buffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA));
+
 		if ((buffer[CLUNET_OFFSET_DST_ADDRESS] == CLUNET_DEVICE_ID) && (buffer[CLUNET_OFFSET_COMMAND] == CLUNET_COMMAND_BOOT_CONTROL) &&
 			!check_crc((char*)buffer, byteIndex))
+
 			return buffer[CLUNET_OFFSET_SIZE];
 	}
 
-	return 0; // Пришёл пакет, но левый
+	return 0;
 }
 
 static void
@@ -238,7 +239,7 @@ write_flash_page(uint32_t address, char* pagebuffer)
 static void
 send_firmware_command(char b)
 {
-	char update_start_command[5] = {CLUNET_DEVICE_ID,CLUNET_BROADCAST_ADDRESS,CLUNET_COMMAND_BOOT_CONTROL,1,b};
+	char update_start_command[5] = { CLUNET_DEVICE_ID, CLUNET_BROADCAST_ADDRESS, CLUNET_COMMAND_BOOT_CONTROL, 1, b };
 	send(update_start_command, 5);
 }
 
@@ -253,19 +254,19 @@ firmware_update()
 		{
 			switch(SUB_COMMAND)
 			{
-				case COMMAND_FIRMWARE_UPDATE_INIT:
-					firmware_update();
-					break;
-				case COMMAND_FIRMWARE_UPDATE_WRITE:
-					{
-						uint16_t address = *((uint32_t*)(buffer+CLUNET_OFFSET_DATA+1));
-						char* pagebuffer = buffer+CLUNET_OFFSET_DATA+5;
-						write_flash_page(address, pagebuffer);
-						send_firmware_command(COMMAND_FIRMWARE_UPDATE_WRITTEN);
-					}
-					break;
-				case COMMAND_FIRMWARE_UPDATE_DONE:					
-					jump_to_app();
+			case COMMAND_FIRMWARE_UPDATE_INIT:
+				firmware_update();
+				break;
+			case COMMAND_FIRMWARE_UPDATE_WRITE:
+			{
+				uint16_t address = *((uint32_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));
+				char* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5);
+				write_flash_page(address, pagebuffer);
+				send_firmware_command(COMMAND_FIRMWARE_UPDATE_WRITTEN);
+			}
+			break;
+			case COMMAND_FIRMWARE_UPDATE_DONE:
+				jump_to_app();
 			}
 		}			
 	}
