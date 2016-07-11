@@ -203,37 +203,31 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 
 			// Стадия отправки приоритета и начальных битов данных
 			case CLUNET_SENDING_PRIO:
-			
-				numBits = 0;
 
+				/* Создадим маску XOR в зависимости от состояния линии */
 				xBitMask = (CLUNET_SENDING) ? 0 : 8;
 
 				prio = clunetCurrentPrio - 1;
 
-				// Если линия прижата, то ищем единичные биты
+				// Если линия прижата, то ищем единичные биты, иначе - нулевые
 				while ((8 & (prio << clunetSendingBitIndex)) ^ xBitMask)
 				{
-					clunetSendingBitIndex++;
-					numBits++;
-				}
-
-				// Если отправлены все биты приоритета
-				if(clunetSendingBitIndex & 4)
-				{
-
-					xBitMask <<= 4;
-
-					// Если линия прижата, то ищем нулевые биты
-					while((0x80 & (dataToSend[0] << (clunetSendingBitIndex - 4))) ^ xBitMask)
+					numBits++;	// Увеличим отправляемые биты
+					// Если отправлены все биты приоритета
+					if(++clunetSendingBitIndex & 4)
 					{
-						clunetSendingBitIndex++;
-						if (++numBits == 5)
-							clunetSendingBitStuff = 1;
+						xBitMask <<= 4;
+						clunetSendingBitIndex = 0;
+
+						// Если линия прижата, то ищем нулевые биты
+						while((0x80 & (dataToSend[0] << clunetSendingBitIndex)) ^ xBitMask)
+						{
+							clunetSendingBitIndex++;
+							if (++numBits == 5)
+								clunetSendingBitStuff = 1;
+						}
+						clunetSendingState = CLUNET_SENDING_DATA;
 					}
-
-					clunetSendingBitIndex -= 4;
-					clunetSendingState++;			// К стадии отправки данных
-
 				}
 
 				break;
