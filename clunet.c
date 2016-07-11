@@ -190,12 +190,20 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 				/* Считаем сколько бит в приоритете единичных, учитывая стоповый */
 				while((prio << ++numBits) & 8);
 
-				// Если отправлены все биты приоритета
+				/* Если отправлены все биты приоритета, смотрим старший бит данных, если 1, то отправим и установим битстаффинг в следующей передаче */
 				if(numBits & 4)
+				{
 					clunetSendingState = CLUNET_SENDING_DATA;	// Перепрыгнем стадию отправки приоритета
+					if (dataToSend[0] & 0x80)
+					{
+						numBits++;
+						clunetSendingBitIndex = clunetSendingBitStuff = 1;
+					}
+				}
+				// Если приоритет не наивысший, то будем передавать в специальной стадии
 				else
 				{
-					clunetSendingState = CLUNET_SENDING_PRIO;	// К следующей фазе
+					clunetSendingState = CLUNET_SENDING_PRIO;	// К следующей фазе передачи
 					clunetSendingBitIndex = numBits;		// Запомним на каком бите приоритета остановились
 				}
 
@@ -210,23 +218,29 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 				prio = clunetCurrentPrio - 1;
 
 				// Если линия прижата, то ищем единичные биты, иначе - нулевые
+				// Хотябы один раз мы должны попасть внутрь цикла.
 				while ((8 & (prio << clunetSendingBitIndex)) ^ xBitMask)
 				{
 					numBits++;	// Увеличим отправляемые биты
+
 					// Если отправлены все биты приоритета
 					if(++clunetSendingBitIndex & 4)
 					{
 						xBitMask <<= 4;
 						clunetSendingBitIndex = 0;
-
+						clunetSendingState = CLUNET_SENDING_DATA;
+	
 						// Если линия прижата, то ищем нулевые биты
 						while((0x80 & (dataToSend[0] << clunetSendingBitIndex)) ^ xBitMask)
 						{
 							clunetSendingBitIndex++;
+							// Если набрали 5 одинаковых бит - делаем битстаффинг
 							if (++numBits == 5)
+							{
 								clunetSendingBitStuff = 1;
+								break;
+							}
 						}
-						clunetSendingState = CLUNET_SENDING_DATA;
 					}
 				}
 
