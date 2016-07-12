@@ -173,7 +173,12 @@ read()
 	if (data >= 0x84)
 	{
 
-		data -= 4;
+		// Если пришло 5 бит, то последний относится к данным, установим его
+		if (data & 1)
+		{
+			buffer[0] = 0x80;
+			bitIndex = bitStuff = 1;
+		}
 		
 		do
 		{
@@ -182,7 +187,7 @@ read()
 			
 			if (data)
 			{
-				uint8_t bitNum = data & 0x7F;
+				uint8_t bitNum = data & 7;
 				
 				if (data & 0x80)
 					buffer[byteIndex] |= (255 >> bitIndex);
@@ -198,7 +203,7 @@ read()
 					if (++byteIndex < CLUNET_READ_BUFFER_SIZE)
 					{
 						bitIndex &= 7;
-						buffer[byteIndex] = (data & 0x80) ? 0xFF : 0;
+						buffer[byteIndex] = (data & 0x80) ? 0xFF : 0x00;
 					}
 
 					/* Иначе ошибка: нехватка приемного буфера -> игнорируем пакет */
