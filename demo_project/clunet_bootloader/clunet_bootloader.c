@@ -295,7 +295,14 @@ write_flash_page(uint32_t address, uint8_t* pagebuffer)
 static void
 send_firmware_command(char b)
 {
-	uint8_t update_start_command[5] = { CLUNET_DEVICE_ID, CLUNET_BROADCAST_ADDRESS, CLUNET_COMMAND_BOOT_CONTROL, 1, b };
+	static uint8_t update_start_command[5] =	{
+													CLUNET_DEVICE_ID,
+													CLUNET_BROADCAST_ADDRESS,
+													CLUNET_COMMAND_BOOT_CONTROL,
+													1,
+													0
+												};
+	update_start_command[4] = b;
 	send(update_start_command, sizeof(update_start_command));
 }
 /*
@@ -303,7 +310,7 @@ static void
 firmware_update()
 {
 
-	uint8_t update_start_command[7] = {CLUNET_DEVICE_ID,CLUNET_BROADCAST_ADDRESS,CLUNET_COMMAND_BOOT_CONTROL,3,COMMAND_FIRMWARE_UPDATE_READY,(MY_SPM_PAGESIZE & 0xFF),(MY_SPM_PAGESIZE >> 8)};
+	static uint8_t update_start_command[7] = {CLUNET_DEVICE_ID,CLUNET_BROADCAST_ADDRESS,CLUNET_COMMAND_BOOT_CONTROL,3,COMMAND_FIRMWARE_UPDATE_READY,(MY_SPM_PAGESIZE & 0xFF),(MY_SPM_PAGESIZE >> 8)};
 
 	send(update_start_command, sizeof(update_start_command));
 
@@ -343,6 +350,16 @@ firmware_update()
 */
 int main (void)
 {
+
+	static uint8_t update_start_command[7] =	{	CLUNET_DEVICE_ID,
+													CLUNET_BROADCAST_ADDRESS,
+													CLUNET_COMMAND_BOOT_CONTROL,
+													3,
+													COMMAND_FIRMWARE_UPDATE_READY,
+													MY_SPM_PAGESIZE >> 8,
+													MY_SPM_PAGESIZE
+												};
+
 	cli();
  	CLUNET_TIMER_INIT;
 	CLUNET_READ_INIT;
@@ -350,65 +367,47 @@ int main (void)
 	
 	send_firmware_command(COMMAND_FIRMWARE_UPDATE_START);
 	
-//	if ((read()) && (SUB_COMMAND == COMMAND_FIRMWARE_UPDATE_INIT))
-//		firmware_update();
+	do
+	{
+	
+		if (read())
+		{
+			uint8_t subCmd = SUB_COMMAND;
+	
+			switch (subCmd)
+			{
+			
+			case COMMAND_FIRMWARE_UPDATE_INIT:
+				send(update_start_command, sizeof(update_start_command));
+				break;
+			case COMMAND_FIRMWARE_UPDATE_WRITE:
+			{
+
+				uint16_t address = *((uint32_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));
+				uint8_t* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5);
+						
+				write_flash_page(address, pagebuffer);
+						
+				send_firmware_command(COMMAND_FIRMWARE_UPDATE_WRITTEN);
+
+			}
+					
+			break;
+				
+			case COMMAND_FIRMWARE_UPDATE_DONE:
+			
+				jump_to_app();
+
+			break;
+		
+			}
+			
+		}
+		
+	}
+	while(1);
 
 	jump_to_app();
 
-
-
-	uint8_t update_start_command[7] =	{	CLUNET_DEVICE_ID,
-											CLUNET_BROADCAST_ADDRESS,
-											CLUNET_COMMAND_BOOT_CONTROL,
-											3,
-											COMMAND_FIRMWARE_UPDATE_READY,
-											MY_SPM_PAGESIZE >> 8,
-											MY_SPM_PAGESIZE
-										};
-
-	send(update_start_command, sizeof(update_start_command));
-
-	while(read())
-	{
-		switch(SUB_COMMAND)
-		{
-
-//		case COMMAND_FIRMWARE_UPDATE_INIT:
-
-//			firmware_update();
-
-//		break;
-
-		case COMMAND_FIRMWARE_UPDATE_WRITE:
-		{
-
-			uint16_t address = *((uint32_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));
-			uint8_t* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5);
-				
-			write_flash_page(address, pagebuffer);
-				
-			send_firmware_command(COMMAND_FIRMWARE_UPDATE_WRITTEN);
-
-		}
-			
-		break;
-
-		case COMMAND_FIRMWARE_UPDATE_DONE:
-
-			jump_to_app();
-
-		}
-	}
-}	
-	
-	
-	
-	
-	
-	
-	
-
-
 	return 0;
-
 }
