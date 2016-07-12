@@ -114,13 +114,13 @@ wait_for_impulse()
 
 	CLUNET_TIMER_REG = 0;
 
-	while(CLUNET_READING == CLUNET_READING)
+	while(CLUNET_READING != CLUNET_READING)
 		if ((CLUNET_TIMER_REG == 255) && (!++time))
 			return 0;
 
 	register uint8_t ticks = CLUNET_TIMER_REG;
 
-	while(CLUNET_READING == CLUNET_READING)
+	while(CLUNET_READING != CLUNET_READING)
 		if ((CLUNET_TIMER_REG == 255) && (!++time))
 			return 0;
 
