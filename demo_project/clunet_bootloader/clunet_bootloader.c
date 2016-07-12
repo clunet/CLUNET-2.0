@@ -70,13 +70,13 @@ send(const uint8_t* data, const uint8_t size)
 	
 	CLUNET_SEND_1;
 	
-	uint8_t xLineBusy;
+	uint8_t xBitMask;
 
 	do
 	{
-		xLineBusy = (CLUNET_SENDING);
+		xBitMask = (CLUNET_SENDING) ? 0x00 : 0x80;
 
-		while (((b << bitIndex) & 0x80) == (xLineBusy))
+		while (((b << bitIndex) & 0x80) ^ xBitMask)
 		{
 
 			numBits++;
@@ -88,7 +88,7 @@ send(const uint8_t* data, const uint8_t size)
 					b = data[byteIndex];
 				else if (byteIndex == size)
 					b = crc;
-				// Данные закончились, нужно финишировать
+				// Данные закончились
 				else
 					break;
 			}
@@ -109,7 +109,8 @@ send(const uint8_t* data, const uint8_t size)
 	}
 	while (byteIndex <= size);
 
-	if (!xLineBusy)
+	// Если линию на финише прижали, то через 1Т отпустим ее
+	if (xBitMask)
 	{
 		PAUSE(1);
 		CLUNET_SEND_0;
