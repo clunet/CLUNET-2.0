@@ -70,11 +70,10 @@ send(const uint8_t* data, const uint8_t size)
 	
 	CLUNET_SEND_1;
 	
-	uint8_t xBitMask;
+	uint8_t xBitMask = 0;
 
 	do
 	{
-		xBitMask = (CLUNET_SENDING) ? 0x00 : 0x80;
 
 		while (((b << bitIndex) & 0x80) ^ xBitMask)
 		{
@@ -103,6 +102,8 @@ send(const uint8_t* data, const uint8_t size)
 		while(CLUNET_TIMER_REG < delay);
 		
 		CLUNET_SEND_INVERT;
+		
+		xBitMask ^= 0x80;
 
 		numBits = (numBits == 5);
 
