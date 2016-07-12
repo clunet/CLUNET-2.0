@@ -54,39 +54,58 @@ check_crc(const uint8_t* data, const uint8_t size)
       return crc;
 }
 
+/*
+
+	CLUNET_TIMER_REG = 0;
+	while(CLUNET_TIMER_REG < (t*CLUNET_T))
+		if(CLUNET_READING)
+			CLUNET_TIMER_REG = 0;
+*/
+
+
+
+
 static void
 send(const uint8_t* data, const uint8_t size)
 {
 
-	uint8_t numBits = 4;
-	uint8_t bitIndex = 0;
-	uint8_t byteIndex = 0;
+	uint8_t numBits, bitIndex, byteIndex;
 
 	uint8_t crc = check_crc(data, size);
 
-	WAIT_INTERFRAME(7);
-	
-	uint8_t b = data[0];
+_repeat:
+
+	WAIT_INTERFRAME(8);			// Ждем межкадровое пространство длиной 8Т и начинаем передачу
 	
 	CLUNET_SEND_1;
+
+	numBits = 4;				// Начинаем с посылки 4 бит (стартовый и 3 бита приоритета). Наивысший приоритет только у служебных приоритетных пакетов.
+
+	byteIndex = bitIndex = 0;
+
+	uint8_t sendingByte = data[0];
 	
-	uint8_t xBitMask = 0;
+	uint8_t xBitMask = 0;		// Битовая маска для целей подсчета бит и получения текущего состояния линии
 
 	do
 	{
 
-		while (((b << bitIndex) & 0x80) ^ xBitMask)
+		while (((sendingByte << bitIndex) & 0x80) ^ xBitMask)
 		{
 
 			numBits++;
 
 			if (++bitIndex & 8)
 			{
+
 				bitIndex = 0;
+
 				if (++byteIndex < size)
-					b = data[byteIndex];
+					sendingByte = data[byteIndex];
+
 				else if (byteIndex == size)
-					b = crc;
+					sendingByte = crc;
+
 				// Данные закончились
 				else
 					break;
@@ -96,13 +115,17 @@ send(const uint8_t* data, const uint8_t size)
 				break;
 		}
 		
-		// Задержка
+		// Задержка по количеству передаваемых бит
 		uint8_t delay = numBits * CLUNET_T;
 		CLUNET_TIMER_REG = 0;
 		while(CLUNET_TIMER_REG < delay);
 		
-		CLUNET_SEND_INVERT;
+		// Конфликт на линии. Ждем и повторяем снова.
+		if(xBitMask && CLUNET_READING)
+			goto _repeat;
 		
+		CLUNET_SEND_INVERT;
+
 		xBitMask ^= 0x80;
 
 		numBits = (numBits == 5);
@@ -124,7 +147,7 @@ static uint8_t
 wait_for_impulse()
 {
 	uint8_t ticks = 0;
-	uint8_t time = 0;
+	uint16_t time = 0;
 
 	CLUNET_TIMER_REG = 0;
 	CLUNET_TIMER_OVERFLOW_CLEAR;
@@ -172,7 +195,7 @@ static uint8_t
 read()
 {
 
-	WAIT_INTERFRAME(7);
+	WAIT_INTERFRAME(7);	// Ждем межкадровое пространство 7Т и переходим в ожидание сигнала на линии
 
 	uint8_t data = wait_for_impulse();
 	
@@ -266,7 +289,7 @@ write_flash_page(uint32_t address, uint8_t* pagebuffer)
 	boot_page_write(address);	// Store buffer in flash page.
 	boot_spm_busy_wait();		// Wait until the memory is written.
 
-	boot_rww_enable ();
+	boot_rww_enable();
 }
 
 static void
@@ -275,36 +298,49 @@ send_firmware_command(char b)
 	uint8_t update_start_command[5] = { CLUNET_DEVICE_ID, CLUNET_BROADCAST_ADDRESS, CLUNET_COMMAND_BOOT_CONTROL, 1, b };
 	send(update_start_command, sizeof(update_start_command));
 }
-
+/*
 static void
 firmware_update()
 {
-	uint8_t update_start_command[7] = {CLUNET_DEVICE_ID,CLUNET_BROADCAST_ADDRESS,CLUNET_COMMAND_BOOT_CONTROL,3,COMMAND_FIRMWARE_UPDATE_READY,(MY_SPM_PAGESIZE & 0xFF),(MY_SPM_PAGESIZE>>8)};
+
+	uint8_t update_start_command[7] = {CLUNET_DEVICE_ID,CLUNET_BROADCAST_ADDRESS,CLUNET_COMMAND_BOOT_CONTROL,3,COMMAND_FIRMWARE_UPDATE_READY,(MY_SPM_PAGESIZE & 0xFF),(MY_SPM_PAGESIZE >> 8)};
+
 	send(update_start_command, sizeof(update_start_command));
+
 	while(1)
 	{
 		if (read())
 		{
 			switch(SUB_COMMAND)
 			{
+
 			case COMMAND_FIRMWARE_UPDATE_INIT:
+
 				firmware_update();
-				break;
+
+			break;
+
 			case COMMAND_FIRMWARE_UPDATE_WRITE:
 			{
+
 				uint16_t address = *((uint32_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));
 				uint8_t* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5);
 				write_flash_page(address, pagebuffer);
 				send_firmware_command(COMMAND_FIRMWARE_UPDATE_WRITTEN);
+
 			}
+			
 			break;
+
 			case COMMAND_FIRMWARE_UPDATE_DONE:
+
 				jump_to_app();
+
 			}
-		}			
+		}
 	}
 }
-
+*/
 int main (void)
 {
 	cli();
@@ -313,10 +349,66 @@ int main (void)
 	CLUNET_SEND_INIT;
 	
 	send_firmware_command(COMMAND_FIRMWARE_UPDATE_START);
+	
+//	if ((read()) && (SUB_COMMAND == COMMAND_FIRMWARE_UPDATE_INIT))
+//		firmware_update();
 
-	if ((read()) && (SUB_COMMAND == COMMAND_FIRMWARE_UPDATE_INIT))
-		firmware_update();
 	jump_to_app();
-	//asm("rjmp 0000");
+
+
+
+	uint8_t update_start_command[7] =	{	CLUNET_DEVICE_ID,
+											CLUNET_BROADCAST_ADDRESS,
+											CLUNET_COMMAND_BOOT_CONTROL,
+											3,
+											COMMAND_FIRMWARE_UPDATE_READY,
+											MY_SPM_PAGESIZE >> 8,
+											MY_SPM_PAGESIZE
+										};
+
+	send(update_start_command, sizeof(update_start_command));
+
+	while(read())
+	{
+		switch(SUB_COMMAND)
+		{
+
+//		case COMMAND_FIRMWARE_UPDATE_INIT:
+
+//			firmware_update();
+
+//		break;
+
+		case COMMAND_FIRMWARE_UPDATE_WRITE:
+		{
+
+			uint16_t address = *((uint32_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));
+			uint8_t* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5);
+				
+			write_flash_page(address, pagebuffer);
+				
+			send_firmware_command(COMMAND_FIRMWARE_UPDATE_WRITTEN);
+
+		}
+			
+		break;
+
+		case COMMAND_FIRMWARE_UPDATE_DONE:
+
+			jump_to_app();
+
+		}
+	}
+}	
+	
+	
+	
+	
+	
+	
+	
+
+
 	return 0;
+
 }
