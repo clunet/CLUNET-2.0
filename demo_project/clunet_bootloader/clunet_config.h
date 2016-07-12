@@ -45,6 +45,8 @@
 /* Timer registers */
 #define CLUNET_TIMER_REG TCNT2
 #define CLUNET_TIMER_REG_OCR OCR2
+#define CLUNET_TIMER_OVERFLOW (TIFR & (1 << TOV2))
+#define CLUNET_TIMER_OVERFLOW_CLEAR setbit(TIFR, TOV2)
 
 /* How to enable and disable timer interrupts */
 #define CLUNET_ENABLE_TIMER_COMP {set_bit(TIFR, OCF2);set_bit(TIMSK, OCIE2);}
