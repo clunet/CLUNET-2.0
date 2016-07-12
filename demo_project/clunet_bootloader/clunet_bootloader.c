@@ -21,7 +21,7 @@
 #define PAUSE(t) {CLUNET_TIMER_REG = 0; while(CLUNET_TIMER_REG < (t*CLUNET_T));}
 #define SEND_BIT(t) {CLUNET_SEND_1; PAUSE(t); CLUNET_SEND_0; PAUSE(1);}
 
-#define FREE_LINE(t) { CLUNET_TIMER_REG = 0; while(CLUNET_TIMER_REG < (t*CLUNET_T)) if(CLUNET_READING) CLUNET_TIMER_REG = 0; }
+#define WAIT_INTERFRAME(t) { CLUNET_TIMER_REG = 0; while(CLUNET_TIMER_REG < (t*CLUNET_T)) if(CLUNET_READING) CLUNET_TIMER_REG = 0; }
 
 #if SPM_PAGESIZE > 64
 #define MY_SPM_PAGESIZE 64
@@ -34,29 +34,29 @@ volatile char update = 0;
 char buffer[MY_SPM_PAGESIZE+0x10];
 static void (*jump_to_app)(void) = 0x0000;
 
-static char
-check_crc(char* data, unsigned char size)
+char
+check_crc(const char* data, const uint8_t size)
 {
-      uint8_t crc=0;
-      uint8_t i,j;
-      for (i=0; i<size;i++) 
+      uint8_t crc = 0;
+      uint8_t i, j;
+      for (i = 0; i < size; i++) 
       {
             uint8_t inbyte = data[i];
-            for (j=0;j<8;j++) 
+			
+            for (j = 0; j < 8; j++) 
             {
-                  uint8_t mix = (crc ^ inbyte) & 0x01;
+                  uint8_t mix = (crc ^ inbyte) & 1;
                   crc >>= 1;
-                  if (mix) 
-                        crc ^= 0x8C;
-                  
+                  if (mix)
+					crc ^= 0x8C;
                   inbyte >>= 1;
             }
       }
       return crc;
 }
 
-static void
-send(char* data, uint8_t size)
+void
+send(const char* data, const uint8_t size)
 {
 
 	uint8_t numBits = 4;
@@ -65,68 +65,89 @@ send(char* data, uint8_t size)
 
 	char crc = check_crc(data, size);
 
-	FREE_LINE(7);
+	WAIT_INTERFRAME(7);
+	
+	uint8_t b = data[0];
 	
 	CLUNET_SEND_1;
+	
+	uint8_t xLineBusy;
 
 	do
 	{
-		uint8_t b = (byteIndex < size) ? data[byteIndex] : crc;
+		xLineBusy = (CLUNET_SENDING);
 
-		uint8_t xMask = (CLUNET_SENDING) ? 0 : 0x80;
-		
-		while (((b << bitIndex) & 0x80) ^ xMask)
+		while (((b << bitIndex) & 0x80) == (xLineBusy))
 		{
+
+			numBits++;
 
 			if (++bitIndex & 8)
 			{
 				bitIndex = 0;
-				byteIndex++;
+				if (++byteIndex < size)
+					b = data[byteIndex];
+				else if (byteIndex == size)
+					b = crc;
+				// Данные закончились, нужно финишировать
+				else
+					break;
 			}
 
-			if((++numBits == 5) || (byteIndex > size))
+			if(numBits == 5)
 				break;
 		}
 		
-		// Задержка, соответствующая количеству бит
+		// Задержка
 		uint8_t delay = numBits * CLUNET_T;
 		CLUNET_TIMER_REG = 0;
 		while(CLUNET_TIMER_REG < delay);
-
+		
 		CLUNET_SEND_INVERT;
 
 		numBits = (numBits == 5);
 
 	}
 	while (byteIndex <= size);
-	
-	if (CLUNET_SENDING)
+
+	if (!xLineBusy)
 	{
 		PAUSE(1);
-		CLUNET_SEND_INVERT;
+		CLUNET_SEND_0;
 	}
+
 }
+
 
 static uint8_t
 wait_for_impulse()
 {
+	uint8_t ticks = 0;
 	uint8_t time = 0;
+	uint8_t i;
 
 	CLUNET_TIMER_REG = 0;
 	CLUNET_TIMER_OVERFLOW_CLEAR;
 
-	while(CLUNET_READING != CLUNET_READING)
-		if (CLUNET_TIMER_OVERFLOW)
-		{
-			// После 256 полных циклов таймера выйдем по таймауту
-			if (!++time)
-				return 0;
-			CLUNET_TIMER_OVERFLOW_CLEAR;
-		}
 
-	uint8_t ticks = CLUNET_TIMER_REG;
+	for (i = 0; i < 2; i++)
+	{
+		while(CLUNET_READING != CLUNET_READING)
+			if (CLUNET_TIMER_OVERFLOW)
+			{
+				// После 256 полных циклов таймера выйдем по таймауту
+				if (!++time)
+					return 0;
+				CLUNET_TIMER_OVERFLOW_CLEAR;
+			}
+
+		ticks = CLUNET_TIMER_REG - ticks;
 	
-	time = 0;
+//		time = 0;
+	}
+
+/*	
+
 
 	while(CLUNET_READING != CLUNET_READING)
 		if (CLUNET_TIMER_OVERFLOW)
@@ -138,6 +159,8 @@ wait_for_impulse()
 		}
 
 	ticks = CLUNET_TIMER_REG - ticks;
+	
+*/
 
 	if (ticks < CLUNET_READ1)
 		ticks = 1;
@@ -165,7 +188,7 @@ read()
 	uint8_t byteIndex = 0;
 	uint8_t bitStuff = 0;
 	
-	FREE_LINE(7);
+	WAIT_INTERFRAME(7);
 
 	uint8_t data = wait_for_impulse();
 	
@@ -176,7 +199,7 @@ read()
 		// Если пришло 5 бит, то последний относится к данным, установим его
 		if (data & 1)
 		{
-			buffer[0] = 0x80;
+			buffer[0] = data;
 			bitIndex = bitStuff = 1;
 		}
 		
@@ -196,6 +219,7 @@ read()
 
 				// Обновим битовый индекс с учетом битстаффинга
 				bitIndex += (bitNum - bitStuff);
+				bitStuff = (bitNum == 5);
 
 				if (bitIndex & 8)
 				{
@@ -207,21 +231,23 @@ read()
 					}
 
 					/* Иначе ошибка: нехватка приемного буфера -> игнорируем пакет */
-					else return 0;
+					else
+						return 0;
 				
 				}
 				
-				bitStuff = (bitNum == 5);
 				
 			}
-			else return 0;
+			else
+				return 0;
 		}
-		while((byteIndex < CLUNET_OFFSET_DATA) && (byteIndex <= buffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA));
+		while ((byteIndex < CLUNET_OFFSET_DATA) || (byteIndex <= buffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA));
 
-		if ((buffer[CLUNET_OFFSET_DST_ADDRESS] == CLUNET_DEVICE_ID) && (buffer[CLUNET_OFFSET_COMMAND] == CLUNET_COMMAND_BOOT_CONTROL) &&
-			!check_crc((char*)buffer, byteIndex))
-
+		// Пакет принят
+		if ((!check_crc((char*)buffer, byteIndex)) && (buffer[CLUNET_OFFSET_DST_ADDRESS] == CLUNET_DEVICE_ID) &&
+			(buffer[CLUNET_OFFSET_COMMAND] == CLUNET_COMMAND_BOOT_CONTROL))
 			return buffer[CLUNET_OFFSET_SIZE];
+	
 	}
 
 	return 0;
@@ -230,7 +256,7 @@ read()
 static void
 write_flash_page(uint32_t address, char* pagebuffer)
 {
-	eeprom_busy_wait ();
+	eeprom_busy_wait();
 
 #if MY_SPM_PAGESIZE != SPM_PAGESIZE
 	if (address % SPM_PAGESIZE == 0)
