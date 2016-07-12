@@ -113,25 +113,28 @@ wait_for_impulse()
 	uint8_t time = 0;
 
 	CLUNET_TIMER_REG = 0;
+	CLUNET_TIMER_OVERFLOW_CLEAR;
 
 	while(CLUNET_READING != CLUNET_READING)
-		if (CLUNET_TIMER_REG == 255)
+		if (CLUNET_TIMER_OVERFLOW)
 		{
-			CLUNET_TIMER_REG = 0;
+			// После 256 полных циклов таймера выйдем по таймауту
 			if (!++time)
 				return 0;
+			CLUNET_TIMER_OVERFLOW_CLEAR;
 		}
 
-	register uint8_t ticks = CLUNET_TIMER_REG;
+	uint8_t ticks = CLUNET_TIMER_REG;
 	
 	time = 0;
 
 	while(CLUNET_READING != CLUNET_READING)
-		if (CLUNET_TIMER_REG == 255)
+		if (CLUNET_TIMER_OVERFLOW)
 		{
-			CLUNET_TIMER_REG = 0;
-			if (!++time)
+			// Ошибка: слишком большой период
+			if (++time > 1)
 				return 0;
+			CLUNET_TIMER_OVERFLOW_CLEAR;
 		}
 
 	ticks = CLUNET_TIMER_REG - ticks;
