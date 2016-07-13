@@ -7,32 +7,35 @@
 #include <avr/boot.h>
 #include <avr/interrupt.h>
 
-#define COMMAND_FIRMWARE_UPDATE_START 0
-#define COMMAND_FIRMWARE_UPDATE_INIT 1
-#define COMMAND_FIRMWARE_UPDATE_READY 2
-#define COMMAND_FIRMWARE_UPDATE_WRITE 3
-#define COMMAND_FIRMWARE_UPDATE_WRITTEN 4
-#define COMMAND_FIRMWARE_UPDATE_DONE 5
+#define COMMAND_FIRMWARE_UPDATE_START	0	// Информируем сеть, что мы в загрузчике
+#define COMMAND_FIRMWARE_UPDATE_INIT	1	// Субкоманда инициализации процедуры загрузки прошивки
+#define COMMAND_FIRMWARE_UPDATE_READY	2	// Информируем, что мы в режиме прошивки
+#define COMMAND_FIRMWARE_UPDATE_WRITE	3	// Субкоманда записи данных во флеш-память (отправитель внешнее устройство)
+#define COMMAND_FIRMWARE_UPDATE_WRITTEN	4	// Подтверждение выполнения команды записи (отправитель мы)
+#define COMMAND_FIRMWARE_UPDATE_DONE	5	// Субкоманда окончания записи и выполнения записанной программы (отправитель внешнее устройство)
 
-//#define APP_END (FLASHEND - (BOOTSIZE * 2))
-#define COMMAND buffer[CLUNET_OFFSET_COMMAND]
-#define SUB_COMMAND buffer[CLUNET_OFFSET_DATA]
+#define APP_END (FLASHEND - (BOOTSIZE * 2))
 
-#define PAUSE(t) {CLUNET_TIMER_REG = 0; while(CLUNET_TIMER_REG < (t*CLUNET_T));}
+#define RECEIVED_COMMAND buffer[CLUNET_OFFSET_COMMAND]
+#define RECEIVED_SUB_COMMAND buffer[CLUNET_OFFSET_DATA]
 
+/* Вспомогательные макросы для передачи пакетов */
 #define WAIT_INTERFRAME(t) { CLUNET_TIMER_REG = 0; while(CLUNET_TIMER_REG < (t*CLUNET_T)) if(CLUNET_READING) CLUNET_TIMER_REG = 0; }
+#define PAUSE(t) { CLUNET_TIMER_REG = 0; while(CLUNET_TIMER_REG < (t*CLUNET_T)); }
 
-#if SPM_PAGESIZE > 64
-#define MY_SPM_PAGESIZE 64
-#else 
-#define MY_SPM_PAGESIZE SPM_PAGESIZE
+// Максимальный размер страницы
+#if SPM_PAGESIZE > 128
+	#define MY_SPM_PAGESIZE 128
+#else
+	#define MY_SPM_PAGESIZE SPM_PAGESIZE
 #endif
 
+// Таймаут ожидания приемки пакета в циклах переполнения таймера
 #define BOOTLOADER_TIMEOUT_OVERFLOWS ((uint16_t)(((float)BOOTLOADER_TIMEOUT / 1000.0f) * ((float)F_CPU / (float)CLUNET_TIMER_PRESCALER / 256.0f)))
 
-volatile uint8_t update = 0;
 
-static uint8_t buffer[MY_SPM_PAGESIZE+0x10];
+static uint8_t buffer[MY_SPM_PAGESIZE + 11];
+
 static void (*jump_to_app)(void) = 0x0000;
 
 static uint8_t
@@ -55,17 +58,6 @@ check_crc(const uint8_t* data, const uint8_t size)
       }
       return crc;
 }
-
-/*
-
-	CLUNET_TIMER_REG = 0;
-	while(CLUNET_TIMER_REG < (t*CLUNET_T))
-		if(CLUNET_READING)
-			CLUNET_TIMER_REG = 0;
-*/
-
-
-
 
 static void
 send(const uint8_t* data, const uint8_t size)
@@ -149,30 +141,34 @@ static uint8_t
 wait_for_impulse()
 {
 	uint8_t ticks = 0;
-	uint16_t time = 0;
+	uint16_t overflows = 0;
 
 	CLUNET_TIMER_REG = 0;
 	CLUNET_TIMER_OVERFLOW_CLEAR;
 
-	uint8_t i;
+	uint8_t i = 2;
 
-	for (i = 0; i < 2; i++)
+	do
 	{
 
 		while(CLUNET_READING != CLUNET_READING)
 			if (CLUNET_TIMER_OVERFLOW)
 			{
 				// Ожидаем пакет в течение таймаута, заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах)
-				if (++time == BOOTLOADER_TIMEOUT_OVERFLOWS)
+				if (++overflows == BOOTLOADER_TIMEOUT_OVERFLOWS)
 					return 0;
+
 				CLUNET_TIMER_OVERFLOW_CLEAR;
+
 			}
 
 		ticks = CLUNET_TIMER_REG - ticks;
 	
-		time = (BOOTLOADER_TIMEOUT_OVERFLOWS - 2);	// на 2-м проходе переполнение не должно быть более 1 раза, иначе ошибка
+		// на 2-м проходе переполнение не должно быть более 1 раза, иначе ошибка
+		overflows = (BOOTLOADER_TIMEOUT_OVERFLOWS - 2);
 
 	}
+	while(--i);
 
 	if (ticks < CLUNET_READ1)
 		ticks = 1;
@@ -197,9 +193,12 @@ wait_for_impulse()
 
 	ЧТЕНИЕ СИСТЕМНЫХ ПАКЕТОВ ОБНОВЛЕНИЯ
 
-	Бесконечно ожидает освобождение занятой линии, при освобождении ожидает межкадровый интервал длительностью 7Т,
-	переходит в состояние чтения пакета, читает, проверяет контрольную сумму, удостоверяется что этот пакет системный и предназначен для нас,
-	возвращает длину полученных данных в пакете, в случае ошибки - 0
+	static uint8_t read(void)
+	
+	Блокирует управление пока линия прижата, при освобождении ожидает межкадровый интервал длительностью 7Т,
+	переходит в состояние чтения пакета, читает, проверяет контрольную сумму, удостоверяется что этот пакет системный и предназначен для нас.
+
+	Возвращает длину полученных данных в пакете, в случае ошибки - 0.
 
 */
 
@@ -269,7 +268,7 @@ read()
 
 		// Пакет принят
 		if ((!check_crc(buffer, byteIndex)) && (buffer[CLUNET_OFFSET_DST_ADDRESS] == CLUNET_DEVICE_ID) &&
-			(buffer[CLUNET_OFFSET_COMMAND] == CLUNET_COMMAND_BOOT_CONTROL))
+			(RECEIVED_COMMAND == CLUNET_COMMAND_BOOT_CONTROL))
 			return buffer[CLUNET_OFFSET_SIZE];
 	
 	}
@@ -277,48 +276,55 @@ read()
 	return 0;
 }
 
+
 static void
+#if (FLASHEND > USHRT_MAX)
 write_flash_page(uint32_t address, uint8_t* pagebuffer)
+#else
+write_flash_page(uint16_t address, uint8_t* pagebuffer)
+#endif
 {
+
 	eeprom_busy_wait();
 
 #if MY_SPM_PAGESIZE != SPM_PAGESIZE
 	if (!(address % SPM_PAGESIZE))
 #endif
 	{
-		boot_page_erase (address);
+		boot_page_erase(address);
 		boot_spm_busy_wait();		// Wait until the memory is erased.
 	}
 
 	uint8_t i;
-	
 	for (i = 0; i < MY_SPM_PAGESIZE; i += 2)
-	{
-		// Set up little-endian word.
-		uint16_t w = *((uint16_t*)(pagebuffer + i));
-		boot_page_fill(address + i, w);
-	}
+		boot_page_fill(address + i, *((uint16_t*)(pagebuffer + i)));
 
-	boot_page_write(address);	// Store buffer in flash page.
-	boot_spm_busy_wait();		// Wait until the memory is written.
+		boot_page_write(address);	// Store buffer in flash page.
+		boot_spm_busy_wait();		// Wait until the memory is written.
 
-	boot_rww_enable();
+		boot_rww_enable();
 }
 
 static void
-send_firmware_command(const uint8_t b)
+send_firmware_command(const uint8_t command)
 {
-	static uint8_t update_start_command[5] =	{
-													CLUNET_DEVICE_ID,
-													CLUNET_BROADCAST_ADDRESS,
-													CLUNET_COMMAND_BOOT_CONTROL,
-													1,
-													0
-												};
-	update_start_command[4] = b;
+	static uint8_t
+	update_start_command[5] =	{
+									CLUNET_DEVICE_ID,
+									CLUNET_BROADCAST_ADDRESS,
+									CLUNET_COMMAND_BOOT_CONTROL,
+									1,	// размер данных
+									0
+								};
+
+	update_start_command[4] = command;
+
 	send(update_start_command, sizeof(update_start_command));
+
 }
+
 /*
+
 static void
 firmware_update()
 {
@@ -360,18 +366,22 @@ firmware_update()
 		}
 	}
 }
+
 */
+
 int main (void)
 {
 
-	static uint8_t update_start_command[7] =	{	CLUNET_DEVICE_ID,
-													CLUNET_BROADCAST_ADDRESS,
-													CLUNET_COMMAND_BOOT_CONTROL,
-													3,
-													COMMAND_FIRMWARE_UPDATE_READY,
-													MY_SPM_PAGESIZE >> 8,
-													MY_SPM_PAGESIZE
-												};
+	static uint8_t
+	update_start_command[7] =	{
+									CLUNET_DEVICE_ID,
+									CLUNET_BROADCAST_ADDRESS,
+									CLUNET_COMMAND_BOOT_CONTROL,
+									3, // размер данных
+									COMMAND_FIRMWARE_UPDATE_READY,
+									MY_SPM_PAGESIZE >> 8,
+									MY_SPM_PAGESIZE
+								};
 
 	cli();
  	CLUNET_TIMER_INIT;
@@ -380,45 +390,50 @@ int main (void)
 	
 	send_firmware_command(COMMAND_FIRMWARE_UPDATE_START);
 	
-	do
+	while(1)
 	{
-	
+
 		if (read())
 		{
-			uint8_t subCmd = SUB_COMMAND;
-	
+			uint8_t subCmd = RECEIVED_SUB_COMMAND;
+
 			switch (subCmd)
 			{
-			
+
 			case COMMAND_FIRMWARE_UPDATE_INIT:
+
 				send(update_start_command, sizeof(update_start_command));
+
 				break;
+
 			case COMMAND_FIRMWARE_UPDATE_WRITE:
 			{
 
-				uint16_t address = *((uint32_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));
-				uint8_t* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5);
+			#if (FLASHEND > USHRT_MAX)
+				uint32_t address = *((uint32_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));
+			#else
+				uint16_t address = *((uint16_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));	// Адрес страницы памяти берем начиная с 6-го байта (смещение +5). Размер фиксирован - 32 бит.
+			#endif
+
+				uint8_t* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5); // с 10-го байта в пакете (смещение +9) начинаются данные. Размер - MY_SPM_PAGESIZE байт.
+
+				write_flash_page(address, pagebuffer); // Пишем во флеш-память
 						
-				write_flash_page(address, pagebuffer);
-						
-				send_firmware_command(COMMAND_FIRMWARE_UPDATE_WRITTEN);
+				send_firmware_command(COMMAND_FIRMWARE_UPDATE_WRITTEN);	// Отправляем подтверждение записи
 
 			}
-					
+
 			break;
-				
+
 			case COMMAND_FIRMWARE_UPDATE_DONE:
-			
+
 				jump_to_app();
 
-			break;
-		
 			}
-			
+
 		}
-		
+
 	}
-	while(1);
 
 	jump_to_app();
 
