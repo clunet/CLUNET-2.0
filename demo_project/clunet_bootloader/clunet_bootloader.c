@@ -28,6 +28,8 @@
 #define MY_SPM_PAGESIZE SPM_PAGESIZE
 #endif
 
+#define BOOTLOADER_TIMEOUT_OVERFLOWS ((uint16_t)(((float)BOOTLOADER_TIMEOUT / 1000.0f) * ((float)F_CPU / (float)CLUNET_TIMER_PRESCALER / 256.0f)))
+
 volatile uint8_t update = 0;
 
 static uint8_t buffer[MY_SPM_PAGESIZE+0x10];
@@ -160,15 +162,15 @@ wait_for_impulse()
 		while(CLUNET_READING != CLUNET_READING)
 			if (CLUNET_TIMER_OVERFLOW)
 			{
-				// После 256 полных циклов таймера выйдем по таймауту
-				if (!++time)
+				// Ожидаем пакет в течение таймаута, заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах)
+				if (++time == BOOTLOADER_TIMEOUT_OVERFLOWS)
 					return 0;
 				CLUNET_TIMER_OVERFLOW_CLEAR;
 			}
 
 		ticks = CLUNET_TIMER_REG - ticks;
 	
-		time = 254;		// на 2-м проходе переполнение не должно быть более 1 раза, иначе ошибка
+		time = (BOOTLOADER_TIMEOUT_OVERFLOWS - 2);	// на 2-м проходе переполнение не должно быть более 1 раза, иначе ошибка
 
 	}
 
@@ -190,6 +192,16 @@ wait_for_impulse()
 	return (CLUNET_READING) ? ticks : (ticks | 0x80);
 
 }
+
+/*
+
+	ЧТЕНИЕ СИСТЕМНЫХ ПАКЕТОВ ОБНОВЛЕНИЯ
+
+	Бесконечно ожидает освобождение занятой линии, при освобождении ожидает межкадровый интервал длительностью 7Т,
+	переходит в состояние чтения пакета, читает, проверяет контрольную сумму, удостоверяется что этот пакет системный и предназначен для нас,
+	возвращает длину полученных данных в пакете, в случае ошибки - 0
+
+*/
 
 static uint8_t
 read()
@@ -271,19 +283,20 @@ write_flash_page(uint32_t address, uint8_t* pagebuffer)
 	eeprom_busy_wait();
 
 #if MY_SPM_PAGESIZE != SPM_PAGESIZE
-	if (address % SPM_PAGESIZE == 0)
+	if (!(address % SPM_PAGESIZE))
 #endif
 	{
 		boot_page_erase (address);
 		boot_spm_busy_wait();		// Wait until the memory is erased.
 	}
 
-	int i;
+	uint8_t i;
+	
 	for (i = 0; i < MY_SPM_PAGESIZE; i += 2)
 	{
 		// Set up little-endian word.
 		uint16_t w = *((uint16_t*)(pagebuffer + i));
-		boot_page_fill (address + i, w);
+		boot_page_fill(address + i, w);
 	}
 
 	boot_page_write(address);	// Store buffer in flash page.
@@ -293,7 +306,7 @@ write_flash_page(uint32_t address, uint8_t* pagebuffer)
 }
 
 static void
-send_firmware_command(char b)
+send_firmware_command(const uint8_t b)
 {
 	static uint8_t update_start_command[5] =	{
 													CLUNET_DEVICE_ID,
