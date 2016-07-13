@@ -180,10 +180,6 @@
 #  error Timer frequency is too big, decrease CPU frequency or increase timer prescaler
 #endif
 
-#define CLUNET_0_T (CLUNET_T)
-#define CLUNET_1_T (3*CLUNET_T)
-#define CLUNET_INIT_T (10*CLUNET_T)
-
 #define CLUNET_READ1	(CLUNET_T + CLUNET_T/2)
 #define CLUNET_READ2	(2*CLUNET_T + CLUNET_T/2)
 #define CLUNET_READ3	(3*CLUNET_T + CLUNET_T/2)
@@ -242,7 +238,7 @@ void clunet_send(const uint8_t address, const uint8_t prio, const uint8_t comman
 
 // Установка функций, которые вызываются при получении пакетов
 // Эта - получает пакеты, которые адресованы нам
-void clunet_set_on_data_received(void (*f)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size));
+void clunet_set_on_data_received(void (*f)(uint8_t src_address, uint8_t command, char* data, uint8_t size));
 
 // А эта - абсолютно все, которые ходят по сети, включая наши
 void clunet_set_on_data_received_sniff(void (*f)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size));
