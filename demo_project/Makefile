@@ -58,7 +58,7 @@ MCU_TARGET     = atmega8
 #MCU_TARGET     = attiny84
 #MCU_TARGET     = attiny85
 #MCU_TARGET     = attiny861
-OPTIMIZE       = -O2
+OPTIMIZE       = -Os
 
 DEFS           =
 LIBS           = $(CLUNET_PATH)/clunet.c
