@@ -451,7 +451,7 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 		uint8_t idx = 0;
 		do
 			sendBuffer[CLUNET_OFFSET_DATA + idx] = data[idx];
-		while(++idx != size);
+		while(++idx < size);
 
 		/* Добавляем контрольную сумму */
 		sendBuffer[CLUNET_OFFSET_DATA + size] = check_crc(sendBuffer, CLUNET_OFFSET_DATA + size);
