@@ -1,10 +1,3 @@
-/* Name: clunet.h
- * Project: CLUNET network driver
- * Author: Alexey Avdyukhin
- * Creation Date: 2013-09-09
- * License: DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
- */
- 
 #ifndef __clunet_h_included__
 #define __clunet_h_included__
 
@@ -14,10 +7,9 @@
 
 #define CLUNET_SENDING_IDLE 0
 #define CLUNET_SENDING_INIT 1
-#define CLUNET_SENDING_PRIO 2
-#define CLUNET_SENDING_DATA 4
-#define CLUNET_SENDING_STOP 5
-#define CLUNET_SENDING_WAITING_LINE 8
+#define CLUNET_SENDING_DATA 2
+#define CLUNET_SENDING_STOP 3
+#define CLUNET_SENDING_WAIT 4
 
 #define CLUNET_READING_IDLE 0
 #define CLUNET_READING_START 1
