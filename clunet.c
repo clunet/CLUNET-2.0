@@ -31,18 +31,6 @@ static uint8_t readBuffer[CLUNET_READ_BUFFER_SIZE];
 static uint8_t devName[] = CLUNET_DEVICE_NAME;
 #endif
 
-static inline void
-clunet_read_rst_send()
-{
-	/* Если состояние передачи неактивно либо в ожидании, то запланируем сброс чтения и при необходимости начало передачи */
-	if (!(sendingState & 7))
-	{
-		/* подождем 7Т, сбросим статус чтения, потом, при необходимости, через 1Т запустим передачу в прерывании сравнения */
-		CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7*CLUNET_T);
-		CLUNET_ENABLE_TIMER_COMP;	// Включаем прерывание сравнения таймера
-	}
-}
-
 static char
 check_crc(const uint8_t* data, const uint8_t size)
 {
@@ -130,154 +118,144 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		return;
 	}
 
-	/* Проверим на конфликт */
-	if (!CLUNET_SENDING && CLUNET_READING)
-	{
-		CLUNET_DISABLE_TIMER_COMP;					// Выключаем прерывание сравнения таймера
-		sendingState = CLUNET_SENDING_WAITING_LINE;		// Переходим в режим ожидания линии
-	}
+	/* Переменная количества передаваемых бит (сколько периодов Т задержка при следующем вызове прерывания) */
+	register uint8_t numBits = 0;
 
-	/* Все в порядке, можем продолжать */
-	else
-	{
-		/* Переменная количества передаваемых бит (сколько периодов Т задержка при следующем вызове прерывания) */
-		register uint8_t numBits = 0;
+	// Многоцелевая переменная-маска состояния линии и чтения бит данных
+	uint8_t lineFree = CLUNET_SENDING ? 0x80 : 0x00;
+	CLUNET_SEND_INVERT;
 
-		CLUNET_SEND_INVERT;	// Инвертируем значение сигнала
-	
-		/* Смотрим фазу передачи */
-		switch (sendingState)
-		{
-			// Главная фаза передачи данных!
-			case CLUNET_SENDING_DATA:
+	/* Смотрим фазу передачи */
+	switch (sendingState)
+	{
+		// Главная фаза передачи данных!
+		case CLUNET_SENDING_DATA:
 			
-				numBits = bitStuff;
+			numBits = bitStuff;
 
-				bitStuff = 0;
+			bitStuff = 0;
 
-				uint8_t xBitMask = (CLUNET_SENDING) ? 0 : 0x80;
+			/* Если мы прижали линию, то ищем единичные биты, иначе - нулевые */
+			while (((sendBuffer[byteIndex] << bitIndex) & 0x80) ^ lineFree)
+			{
 				
-				/* Если мы прижали линию, то ищем единичные биты, иначе - нулевые */
-				while ((0x80 & (sendBuffer[byteIndex] << bitIndex)) ^ xBitMask)
+				/* Если передан байт данных */
+				if (++bitIndex & 8)
 				{
-				
-					/* Если передан байт данных */
-					if (++bitIndex & 8)
+
+					/* Если не все данные отосланы */
+					if (++byteIndex < sendingLength)
+						bitIndex = 0;		// начинаем передачу следующего байта с бита 0
+
+					/* Иначе передача всех данных закончена */
+					else
 					{
+						sendingState = CLUNET_SENDING_STOP;
+						numBits++;
+						break;
+					}
 
-						/* Если не все данные отосланы */
-						if (++byteIndex < sendingLength)
-							bitIndex = 0;		// начинаем передачу следующего байта с бита 0
+				}
 
-						/* Иначе передача всех данных закончена */
-						else
+				/* Если будем отправлять 5 одноименных бит, то запланируем битстаффинг в следующей передаче */
+				if (++numBits == 5)
+				{
+					bitStuff = 1;
+					break;
+				}
+				
+			}
+			
+			break;
+
+		// Фаза отправки стартового бита, а также битов приоритета, старшего бита данных при условии их равенства единице
+		case CLUNET_SENDING_INIT:
+
+			bitStuff = byteIndex = bitIndex = 0;
+				
+			uint8_t prio = sendingPriority - 1;
+
+			/* Считаем сколько бит в приоритете единичных, учитывая стоповый */
+			while(prio & (4 >> numBits++));
+
+			/* Если отправлены все биты приоритета, смотрим старший бит данных, если 1, то отправим и установим битстаффинг в следующей передаче */
+			if(numBits & 4)
+			{
+				sendingState = CLUNET_SENDING_DATA;	// Перепрыгнем стадию отправки приоритета
+				if (sendBuffer[0] & 0x80)
+				{
+					numBits++;
+					bitIndex = bitStuff = 1;
+				}
+			}
+			// Если приоритет не наивысший, то будем передавать в специальной стадии
+			else
+			{
+				sendingState = CLUNET_SENDING_PRIO;	// К следующей фазе передачи
+				bitIndex = numBits;		// Запомним на каком бите приоритета остановились
+			}
+
+			break;
+
+		// Стадия отправки приоритета и начальных битов данных
+		case CLUNET_SENDING_PRIO:
+
+			lineFree >>= 4;
+
+			prio = sendingPriority - 1;
+
+			// Если линия прижата, то ищем единичные биты, иначе - нулевые
+			// Хотябы один раз мы должны попасть внутрь цикла.
+			while (((prio << bitIndex) & 8) ^ lineFree)
+			{
+				numBits++;	// Увеличим отправляемые биты
+
+				// Если отправлены все биты приоритета
+				if(++bitIndex & 4)
+				{
+					bitIndex = 0;
+					sendingState = CLUNET_SENDING_DATA;
+
+					lineFree <<= 4;
+	
+					// Если линия прижата, то ищем нулевые биты
+					while(((sendBuffer[0] << bitIndex) & 0x80) ^ lineFree)
+					{
+						bitIndex++;
+						// Если набрали 5 одинаковых бит - делаем битстаффинг
+						if (++numBits == 5)
 						{
-							sendingState = CLUNET_SENDING_STOP;
-							numBits++;
+							bitStuff = 1;
 							break;
 						}
-
 					}
+						
+					break;
 
-					/* Если будем отправлять 5 одноименных бит, то запланируем битстаффинг в следующей передаче */
-					if (++numBits == 5)
-					{
-						bitStuff = 1;
-						break;
-					}
-					
 				}
+
+			}
+
+			break;
+
+		case CLUNET_SENDING_STOP:
 				
-				break;
-
-			// Фаза отправки стартового бита, а также битов приоритета, старшего бита данных при условии их равенства единице
-			case CLUNET_SENDING_INIT:
-
-				bitStuff = byteIndex = bitIndex = 0;
-				
-				uint8_t prio = sendingPriority - 1;
-
-				/* Считаем сколько бит в приоритете единичных, учитывая стоповый */
-				while(prio & (4 >> numBits++));
-
-				/* Если отправлены все биты приоритета, смотрим старший бит данных, если 1, то отправим и установим битстаффинг в следующей передаче */
-				if(numBits & 4)
-				{
-					sendingState = CLUNET_SENDING_DATA;	// Перепрыгнем стадию отправки приоритета
-					if (sendBuffer[0] & 0x80)
-					{
-						numBits++;
-						bitIndex = bitStuff = 1;
-					}
-				}
-				// Если приоритет не наивысший, то будем передавать в специальной стадии
-				else
-				{
-					sendingState = CLUNET_SENDING_PRIO;	// К следующей фазе передачи
-					bitIndex = numBits;		// Запомним на каком бите приоритета остановились
-				}
-
-				break;
-
-			// Стадия отправки приоритета и начальных битов данных
-			case CLUNET_SENDING_PRIO:
-
-				/* Создадим маску XOR в зависимости от состояния линии */
-				xBitMask = (CLUNET_SENDING) ? 0 : 8;
-
-				prio = sendingPriority - 1;
-
-				// Если линия прижата, то ищем единичные биты, иначе - нулевые
-				// Хотябы один раз мы должны попасть внутрь цикла.
-				while ((8 & (prio << bitIndex)) ^ xBitMask)
-				{
-					numBits++;	// Увеличим отправляемые биты
-
-					// Если отправлены все биты приоритета
-					if(++bitIndex & 4)
-					{
-						xBitMask <<= 4;
-						bitIndex = 0;
-						sendingState = CLUNET_SENDING_DATA;
-	
-						// Если линия прижата, то ищем нулевые биты
-						while((0x80 & (sendBuffer[0] << bitIndex)) ^ xBitMask)
-						{
-							bitIndex++;
-							// Если набрали 5 одинаковых бит - делаем битстаффинг
-							if (++numBits == 5)
-							{
-								bitStuff = 1;
-								break;
-							}
-						}
-						break;
-					}
-				}
-
-				break;
-
-			case CLUNET_SENDING_STOP:
-				
-				// Если линия была прижата (последний бит 1), то просто отпускаем, во внешнем прерывании запланируются необходимые действия
-				if (!CLUNET_SENDING)
-				{
-					CLUNET_DISABLE_TIMER_COMP;
-					sendingState = CLUNET_SENDING_IDLE;
-					return;
-				}
-				// Иначе если была отпущена (последний бит 0), то сделаем короткий импульс 1Т
-				else
-					numBits++;
-
-		}
-
-		CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
+			// Если линию отпустили, то передача закончена, во внешнем прерывании запланируются необходимые действия
+			if (lineFree)
+			{
+				CLUNET_DISABLE_TIMER_COMP;
+				sendingState = CLUNET_SENDING_IDLE;
+				return;
+			}
+			// Иначе если была отпущена (последний бит 0), то сделаем короткий импульс 1Т
+			else
+				numBits++;
 
 	}
 
-}
+	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
 
+}
 
 /* Процедура внешнего прерывания по фронту и спаду сигнала */
 ISR(CLUNET_INT_VECTOR)
@@ -319,7 +297,13 @@ ISR(CLUNET_INT_VECTOR)
 	/* Если линию освободило (пришли единицы) */
 	if (lineFree)
 	{
-		clunet_read_rst_send();
+		/* Если состояние передачи неактивно либо в ожидании, то запланируем сброс чтения и при необходимости начало передачи */
+		if (!(sendingState & 7))
+		{
+			/* подождем 7Т, сбросим статус чтения, потом, при необходимости, через 1Т запустим передачу в прерывании сравнения */
+			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7*CLUNET_T);
+			CLUNET_ENABLE_TIMER_COMP;	// Включаем прерывание сравнения таймера
+		}
 		bitNumSync = bitNum;	// Сохраняем количество прочитанных бит после синхронизации
 	}
 	/* Если линию прижало к нулю (пришли нули или начало пакета) */
@@ -328,11 +312,18 @@ ISR(CLUNET_INT_VECTOR)
 		tickSync = now;		// Синхронизация времени чтения
 		bitNumSync = 0;		// Сброс прочитанных бит после синхронизации
 
-		/* Проверка на конфликт передачи */
+		/* Проверка на конфликт передачи. Если мы в активной фазе передачи, и не жмем линию */
 		if ((sendingState & 7) && !CLUNET_SENDING)
 		{
-			CLUNET_DISABLE_TIMER_COMP;
-			sendingState = CLUNET_SENDING_WAITING_LINE;
+			// Если разница во времени когда мы должны прижать линию более 0.3Т, то конфликт однозначен - отдаем линию другому устройству (арбитраж проигран)
+			if((CLUNET_TIMER_REG_OCR - now) > (uint8_t)((float)CLUNET_T * 0.3f))
+			{
+				CLUNET_DISABLE_TIMER_COMP;
+				sendingState = CLUNET_SENDING_WAITING_LINE;
+			}
+			// Если разница во времени менее 0.3Т, то это просто рассинхронизация, синхронизируем регистр сравнения и быстро попадем в прерывание сравнения для проолжения передачи
+			else
+				CLUNET_TIMER_REG_OCR = now;
 		}
 
 		// Если в ожидании приема пакета, то переходим к фазе начала приемки кадра, обнуляем счетчики и выходим
