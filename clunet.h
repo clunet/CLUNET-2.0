@@ -171,7 +171,7 @@
 /* Приоритет пакета 4 - команда, на которую нужно сразу отреагировать */
 
 #ifndef CLUNET_T
-#define CLUNET_T ((uint8_t)(((float)F_CPU / (float)CLUNET_TIMER_PRESCALER) / 15625.0f))
+#define CLUNET_T ((F_CPU / CLUNET_TIMER_PRESCALER) / 15625)
 #endif
 #if CLUNET_T < 8
 #  error Timer frequency is too small, increase CPU frequency or decrease timer prescaler
