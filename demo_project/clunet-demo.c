@@ -5,15 +5,15 @@
 #include <avr/sleep.h>
 #include "clunet.h"
 
-void data_received(unsigned char src_address, unsigned char dst_address, unsigned char command, char* data, unsigned char size)
+void data_received(uint8_t src_address, uint8_t command, uint8_t* data, uint8_t size)
 {
-	
+	;
 }
 
 int main (void)
 {
 	clunet_init();
-	clunet_set_on_data_received(data_received);	
+	clunet_set_on_data_received(data_received);
 	sei();
 
 	char buffer[1];
