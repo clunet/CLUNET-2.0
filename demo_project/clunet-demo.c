@@ -18,7 +18,7 @@ int main (void)
 
 	uint8_t buffer[1];
 	buffer[0] = 1;
-	clunet_send(CLUNET_BROADCAST_ADDRESS, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DEVICE_POWER_INFO, buffer, sizeof(buffer));
+	clunet_send(CLUNET_BROADCAST_ADDRESS, CLUNET_PRIORITY_MESSAGE, 50, buffer, sizeof(buffer));
 	
 	while (1)
 	{
