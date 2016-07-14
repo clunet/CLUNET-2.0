@@ -234,13 +234,13 @@ void clunet_init();
 uint8_t clunet_ready_to_send();
 
 // Отправка пакета
-void clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, const char* data, const uint8_t size);
+void clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, const uint8_t* data, const uint8_t size);
 
 // Установка функций, которые вызываются при получении пакетов
 // Эта - получает пакеты, которые адресованы нам
-void clunet_set_on_data_received(void (*f)(uint8_t src_address, uint8_t command, char* data, uint8_t size));
+void clunet_set_on_data_received(void (*f)(uint8_t src_address, uint8_t command, uint8_t* data, uint8_t size));
 
 // А эта - абсолютно все, которые ходят по сети, включая наши
-void clunet_set_on_data_received_sniff(void (*f)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size));
+void clunet_set_on_data_received_sniff(void (*f)(uint8_t src_address, uint8_t dst_address, uint8_t command, uint8_t* data, uint8_t size));
 
 #endif
