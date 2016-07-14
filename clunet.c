@@ -189,7 +189,7 @@ _send_data:
 				numBits++;
 
 				// Если отправлены все биты приоритета
-				if(++bitIndex & 4)
+				if(++bitIndex == 3)
 				{
 					sendingState = CLUNET_SENDING_DATA;
 					bitIndex = 0;
@@ -244,7 +244,7 @@ ISR(CLUNET_INT_VECTOR)
 		uint8_t ticks, period;
 
 		// Цикл подсчета количества бит с момента последней синхронизации по спаду
-		for (ticks = tickSync - now, period = CLUNET_READ1, bitNum = 1 ; ticks >= period ; period += CLUNET_T)
+		for (ticks = now - tickSync, period = CLUNET_READ1, bitNum = 1 ; ticks >= period ; period += CLUNET_T)
 		{
 			if(++bitNum > 10)
 			{
@@ -315,6 +315,7 @@ ISR(CLUNET_INT_VECTOR)
 		}
 	}
 
+
 	switch (readingState)
 	{
 		// Главная фаза чтения данных
@@ -333,6 +334,7 @@ ISR(CLUNET_INT_VECTOR)
 
 			if (bitIndex & 8)
 			{
+			
 				// Если пакет прочитан полностью, то проверим контрольную сумму
 				if ((++byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
 				{
@@ -392,7 +394,7 @@ clunet_init()
 	CLUNET_READ_INIT;
 	CLUNET_TIMER_INIT;
 	CLUNET_INT_INIT;
-	uint8_t reset_source = MCUCSR;
+	uint8_t reset_source = MCUSR;
 	clunet_send (
 		CLUNET_BROADCAST_ADDRESS,
 		CLUNET_PRIORITY_MESSAGE,
@@ -400,7 +402,7 @@ clunet_init()
 		&reset_source,
 		sizeof(reset_source)
 	);
-	MCUCSR = 0;
+	MCUSR = 0;
 }
 
 void
