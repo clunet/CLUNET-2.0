@@ -60,7 +60,7 @@
 #define CLUNET_DISABLE_TIMER_COMP unset_bit(TIMSK, OCIE2)
 
 /* How to init and enable external interrupt (read pin) */
-#define CLUNET_INIT_INT { set_bit(MCUCR,ISC00); unset_bit(MCUCR,ISC01); set_bit(GICR, INT0); }
+#define CLUNET_INT_INIT { set_bit(MCUCR,ISC00); unset_bit(MCUCR,ISC01); set_bit(GICR, INT0); }
 
 /* Interrupt vectors */
 #define CLUNET_TIMER_COMP_VECTOR TIMER2_COMP_vect
