@@ -61,8 +61,8 @@ check_crc(const char* data, const uint8_t size)
       uint8_t a = 0, b;
       do
       {
-            char inbyte = data[a];
             b = 0;
+            char inbyte = data[a];
             do
             {
                   uint8_t mix = (crc ^ inbyte) & 1;
