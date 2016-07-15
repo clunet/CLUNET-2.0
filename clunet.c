@@ -35,8 +35,8 @@ SOFTWARE.
 
 
 /* Указатели на функции обратного вызова при получении пакетов (должны быть как можно короче) (ОЗУ: 4 байта при МК с 16-битной адресацией) */
-static void (*cbDataReceived)(uint8_t src_address, uint8_t command, uint8_t* data, uint8_t size) = 0;
-static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, uint8_t* data, uint8_t size) = 0;
+static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
+static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
 /* Глобальные статические переменные (ОЗУ: 5 байт) */
 static uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
@@ -46,22 +46,22 @@ static uint8_t sendingLength; // Длина данных для отправки
 static uint8_t sendingPriority; // Приоритет отправляемого пакета (от 1 до 8)
 
 /* Буферы данных */
-static uint8_t sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Буфер передачи
-static uint8_t readBuffer[CLUNET_READ_BUFFER_SIZE]; // Буфер чтения
+static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Буфер передачи
+static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Буфер чтения
 
 #ifdef CLUNET_DEVICE_NAME
-const static uint8_t devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
+const static char devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
 #endif
 
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
 static char
-check_crc(const uint8_t* data, const uint8_t size)
+check_crc(const char* data, const uint8_t size)
 {
       uint8_t crc = 0;
       uint8_t i, j;
       for (i = 0; i < size; i++)
       {
-            uint8_t inbyte = data[i];
+            char inbyte = data[i];
             for (j = 0 ; j < 8 ; j++)
             {
                   uint8_t mix = (crc ^ inbyte) & 1;
@@ -75,7 +75,7 @@ check_crc(const uint8_t* data, const uint8_t size)
 
 /* Встраиваемая функция обработки входящего пакета */
 static inline void
-clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const uint8_t command, uint8_t* data, const uint8_t size)
+clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const uint8_t command, char* data, const uint8_t size)
 {
 	if (cbDataReceivedSniff)
 		(*cbDataReceivedSniff)(src_address, dst_address, command, data, size);
@@ -407,7 +407,7 @@ clunet_init()
 	CLUNET_READ_INIT;
 	CLUNET_TIMER_INIT;
 	CLUNET_INT_INIT;
-	uint8_t reset_source = MCUSR;
+	char reset_source = MCUSR;
 	clunet_send (
 		CLUNET_BROADCAST_ADDRESS,
 		CLUNET_PRIORITY_MESSAGE,
@@ -419,7 +419,7 @@ clunet_init()
 }
 
 void
-clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, const uint8_t* data, const uint8_t size)
+clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, const char* data, const uint8_t size)
 {
 	/* Если размер данных в пределах буфера передачи (максимально для протокола 250 байт) */
 	if (size < (CLUNET_SEND_BUFFER_SIZE - CLUNET_OFFSET_DATA))
@@ -472,13 +472,13 @@ clunet_ready_to_send()
 }
 
 void
-clunet_set_on_data_received(void (*f)(uint8_t src_address, uint8_t command, uint8_t* data, uint8_t size))
+clunet_set_on_data_received(void (*f)(uint8_t src_address, uint8_t command, char* data, uint8_t size))
 {
 	cbDataReceived = f;
 }
 
 void
-clunet_set_on_data_received_sniff(void (*f)(uint8_t src_address, uint8_t dst_address, uint8_t command, uint8_t* data, uint8_t size))
+clunet_set_on_data_received_sniff(void (*f)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size))
 {
 	cbDataReceivedSniff = f;
 }
