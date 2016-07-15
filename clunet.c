@@ -280,7 +280,7 @@ ISR(CLUNET_INT_VECTOR)
 		// Если состояние передачи неактивно либо в ожидании, то запланируем сброс чтения и при необходимости начало передачи
 		if (!(sendingState & 3))
 		{
-			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7*CLUNET_T - 1);
+			CLUNET_TIMER_REG_OCR = now + (7*CLUNET_T);
 			CLUNET_ENABLE_TIMER_COMP;
 		}
 
