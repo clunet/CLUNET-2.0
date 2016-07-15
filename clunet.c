@@ -127,10 +127,10 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
 	static uint8_t bitIndex, byteIndex, bitStuff; // Статичные переменные в ОЗУ (3 байт)
-	uint8_t numBits, lineFree, prio;
+	uint8_t numBits, prio;
 
 	// Многоцелевая переменная-маска состояния линии и чтения бит данных
-	lineFree = CLUNET_SENDING ? 0x80 : 0x00;
+	const uint8_t lineFree = CLUNET_SENDING ? 0x80 : 0x00;
 
 	// Если передатчик освободился, сбросим статус чтения и пока сюда не планируем возвращаться
 	if (sendingState == CLUNET_SENDING_IDLE)
