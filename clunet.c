@@ -149,7 +149,7 @@ _send_delay_1t:
 	}
 
 	// Если линия была отпущена и это не было зафиксировано в процедуре внешнего прерывания, то значит возник конфликт на линии, замолкаем
-	else if (!(sendingState == CLUNET_SENDING_INIT && !bitIndex) && !lineFree && !readingBitNumSync)
+	else if (!lineFree && !readingBitNumSync && !(sendingState == CLUNET_SENDING_INIT && !bitIndex))
 	{
 		sendingState = CLUNET_SENDING_WAIT;
 		goto _disable_oci;
