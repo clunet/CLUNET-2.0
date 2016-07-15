@@ -147,7 +147,7 @@ _send_delay:
 		return;
 	}
 	// Если линия была отпущена и это не было зафиксировано в процедуре внешнего прерывания, то значит возник конфликт на линии, замолкаем
-	else if (!lineFree && !readingBitNumSync)
+	else if (sendingState != CLUNET_SENDING_INIT && !lineFree && !readingBitNumSync)
 	{
 		sendingState = CLUNET_SENDING_WAIT;
 		goto _send_end;
