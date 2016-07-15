@@ -197,7 +197,7 @@ _send_data:
 		// Фаза отправки заголовка кадра
 		case CLUNET_SENDING_INIT:
 
-			prio = ((sendingPriority - 1) << 5);
+			prio = (sendingPriority - 1) << 5;
 
 			while (((prio << bitIndex) & 0x80) ^ lineFree)
 			{
@@ -443,7 +443,7 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 			uint8_t idx = 0;
 			do
 				sendBuffer[CLUNET_OFFSET_DATA + idx] = data[idx];
-			while(++idx < size);
+			while (++idx < size);
 		}
 
 		/* Добавляем контрольную сумму */
@@ -456,7 +456,7 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 		// Если линия свободна, то запланируем отправку
 		if (!CLUNET_READING)
 		{
-			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + 7*CLUNET_T;
+			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7*CLUNET_T);
 			CLUNET_ENABLE_TIMER_COMP;
 		}
 
