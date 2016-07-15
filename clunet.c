@@ -347,7 +347,7 @@ ISR(CLUNET_INT_VECTOR)
 				readBuffer[byteIndex] &= ~(255 >> bitIndex);
 
 			// Обновим битовый индекс с учетом битстаффинга
-			bitIndex += (bitNum - bitStuff);
+			bitIndex += bitNum - bitStuff;
 
 			if (bitIndex & 8)
 			{
