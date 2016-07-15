@@ -45,11 +45,12 @@ static uint8_t readingBitNumSync; // Количество прочитанных
 static uint8_t sendingLength; // Длина данных для отправки вместе с заголовком кадра
 static uint8_t sendingPriority; // Приоритет отправляемого пакета (от 1 до 8)
 
+/* Буферы данных */
 static uint8_t sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Буфер передачи
 static uint8_t readBuffer[CLUNET_READ_BUFFER_SIZE]; // Буфер чтения
 
 #ifdef CLUNET_DEVICE_NAME
-static uint8_t devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
+const static uint8_t devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
 #endif
 
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
