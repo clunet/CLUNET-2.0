@@ -38,19 +38,20 @@ SOFTWARE.
 static void (*cbDataReceived)(uint8_t src_address, uint8_t command, uint8_t* data, uint8_t size) = 0;
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, uint8_t* data, uint8_t size) = 0;
 
-static uint8_t sendingState = CLUNET_SENDING_IDLE;
-static uint8_t readingState = CLUNET_READING_IDLE;
-static uint8_t readingBitNumSync;
-static uint8_t sendingLength;
-static uint8_t sendingPriority;
+static uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
+static uint8_t readingState = CLUNET_READING_IDLE; // Состояние чтения
+static uint8_t readingBitNumSync; // Количество прочитанных бит с момента синхронизации по спаду
+static uint8_t sendingLength; // Длина данных для отправки вместе с заголовком кадра
+static uint8_t sendingPriority; // Приоритет отправляемого пакета (от 1 до 8)
 
-static uint8_t sendBuffer[CLUNET_SEND_BUFFER_SIZE];
-static uint8_t readBuffer[CLUNET_READ_BUFFER_SIZE];
+static uint8_t sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Буфер передачи
+static uint8_t readBuffer[CLUNET_READ_BUFFER_SIZE]; // Буфер чтения
 
 #ifdef CLUNET_DEVICE_NAME
-static uint8_t devName[] = CLUNET_DEVICE_NAME;
+static uint8_t devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
 #endif
 
+/* Функция нахождения контрольной суммы */
 static char
 check_crc(const uint8_t* data, const uint8_t size)
 {
@@ -70,6 +71,7 @@ check_crc(const uint8_t* data, const uint8_t size)
       return crc;
 }
 
+/* Встраиваемая функция обработки входящего пакета */
 static inline void
 clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const uint8_t command, uint8_t* data, const uint8_t size)
 {
@@ -105,12 +107,12 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 
 				clunet_send(src_address, CLUNET_PRIORITY_COMMAND, CLUNET_COMMAND_PING_REPLY, data, size);
 				break;
-				
+
 			default:
 
 				if (cbDataReceived)
 					(*cbDataReceived)(src_address, command, data, size);
-				
+
 			}
 		}
 	}
@@ -119,8 +121,7 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 /* Процедура прерывания сравнения таймера */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
-
-	static uint8_t bitIndex, byteIndex, bitStuff;
+	static uint8_t bitIndex, byteIndex, bitStuff; // Статичные переменные в ОЗУ (3 байт)
 	uint8_t numBits, lineFree, prio;
 
 	// Многоцелевая переменная-маска состояния линии и чтения бит данных
@@ -146,6 +147,7 @@ _send_delay_1t:
 		CLUNET_TIMER_REG_OCR += CLUNET_T;
 		return;
 	}
+
 	// Если линия была отпущена и это не было зафиксировано в процедуре внешнего прерывания, то значит возник конфликт на линии, замолкаем
 	else if (!(sendingState == CLUNET_SENDING_INIT && !bitIndex) && !lineFree && !readingBitNumSync)
 	{
@@ -153,10 +155,11 @@ _send_delay_1t:
 		goto _disable_oci;
 	}
 
-	// Переменная количества передаваемых бит
+	// Количество бит для передачи
 	numBits = bitStuff;
 	
-	CLUNET_SEND_INVERT;	// Инверсия выхода
+	// Инверсия выхода
+	CLUNET_SEND_INVERT;
 
 	// Смотрим фазу передачи
 	switch (sendingState)
@@ -179,14 +182,14 @@ _send_data:
 					else
 						sendingState = CLUNET_SENDING_STOP;
 				}
-				/* Если будем отправлять 5 одноименных бит, то запланируем битстаффинг в следующей передаче */
+				/* Нам нужно не более 5 бит, выходим из цикла */
 				if (++numBits == 5)
 					break;
 			}
 			
 			break;
 
-		// Фаза отправки стартового бита, а также битов приоритета, старшего бита данных при условии их равенства единице
+		// Фаза отправки заголовка кадра
 		case CLUNET_SENDING_INIT:
 
 			prio = ((sendingPriority - 1) << 5);
@@ -200,15 +203,16 @@ _send_data:
 				{
 					sendingState = CLUNET_SENDING_DATA;
 					bitIndex = 0;
-					goto _send_data;
+					goto _send_data; // Уходим в часть кода, занимающейся отправкой данных
 				}
 			}
 
 			break;
 
+		// Фаза завершения передачи кадра и генерации стопового бита при необходимости
 		case CLUNET_SENDING_STOP:
 
-			// Если линию отпустили, то передача закончена, во внешнем прерывании запланируются необходимые действия
+			// Если линию отпустили, то стоповый бит не требуется, во внешнем прерывании запланируются все необходимые действия
 			if (lineFree)
 			{
 				sendingState = CLUNET_SENDING_IDLE;
@@ -216,7 +220,8 @@ _disable_oci:
 				CLUNET_DISABLE_TIMER_COMP;
 				return;
 			}
-			// Иначе если была отпущена (последний бит 0), то сделаем короткий импульс 1Т
+
+			// Иначе если заняли, то сделаем короткий стоповый импульс длительностью 1Т
 			else
 				goto _send_delay_1t;
 
