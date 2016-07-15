@@ -58,10 +58,10 @@ static char
 check_crc(const char* data, const uint8_t size)
 {
       char crc = 0;
-      uint8_t a = 0, b;
+      uint8_t a = 0;
       do
       {
-            b = 8;
+            uint8_t b = 8;
             char inbyte = data[a];
             do
             {
