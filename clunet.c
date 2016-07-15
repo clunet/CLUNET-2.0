@@ -387,11 +387,10 @@ ISR(CLUNET_INT_VECTOR)
 			}
 
 	}
-
 	/* Проверка на битстаффинг, учитываем в следующем цикле */
 	bitStuff = (bitNum == 5);
-
 }
+/* Конец ISR(CLUNET_INT_VECTOR) */
 
 void
 clunet_init()
@@ -456,6 +455,7 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 
 	}
 }
+/* Конец void clunet_send(.....) */
 
 /* Возвращает 0, если готов к передаче, иначе приоритет текущей задачи */
 uint8_t
