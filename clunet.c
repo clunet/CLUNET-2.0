@@ -287,6 +287,7 @@ ISR(CLUNET_INT_VECTOR)
 		// Если состояние передачи в активной фазе
 		if (sendingState & 3)
 		{
+/*
 			// Найдем разницу времени между тем когда мы оказались здесь и когда отпустили линию
 			int8_t delta = now - sendingLastOCR;
 
@@ -299,7 +300,7 @@ ISR(CLUNET_INT_VECTOR)
 				CLUNET_DISABLE_TIMER_COMP;
 				sendingState = CLUNET_SENDING_WAIT;
 			}
-
+*/
 		}
 		// Если состояние передачи неактивно либо в ожидании, то запланируем сброс чтения и при необходимости начало передачи
 		else
