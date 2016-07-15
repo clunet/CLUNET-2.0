@@ -242,15 +242,14 @@ ISR(CLUNET_INT_VECTOR)
 
 	static uint8_t bitIndex, byteIndex, bitStuff, tickSync; // Статичные переменные
 
-	uint8_t now, lineFree, bitNum;
-	
-	
-	now = CLUNET_TIMER_REG; // Текущее значение таймера
+	// Текущее значение таймера
+	const uint8_t now = CLUNET_TIMER_REG;
 
 	// Многоцелевая переменная состояния линии и заполнения байт соответствующими значениями
-	lineFree = CLUNET_READING ? 0x00 : 0xFF;
+	const uint8_t lineFree = CLUNET_READING ? 0x00 : 0xFF;
 
-	bitNum = 0; // Количество прочитанных бит
+	// Количество прочитанных бит
+	uint8_t bitNum = 0;
 
 	if (readingState)
 	{
