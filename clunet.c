@@ -34,10 +34,11 @@ SOFTWARE.
 #include <avr/interrupt.h>
 
 
-/* Функции обратного вызова при получении пакетов (должны быть как можно короче, так как вызываются прерываниями */
+/* Указатели на функции обратного вызова при получении пакетов (должны быть как можно короче) (ОЗУ: 4 байта при МК с 16-битной адресацией) */
 static void (*cbDataReceived)(uint8_t src_address, uint8_t command, uint8_t* data, uint8_t size) = 0;
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, uint8_t* data, uint8_t size) = 0;
 
+/* Глобальные статические переменные (ОЗУ: 5 байт) */
 static uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
 static uint8_t readingState = CLUNET_READING_IDLE; // Состояние чтения
 static uint8_t readingBitNumSync; // Количество прочитанных бит с момента синхронизации по спаду
@@ -118,7 +119,7 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 	}
 }
 
-/* Процедура прерывания сравнения таймера */
+/* Процедура прерывания сравнения таймера (ОЗУ: 3 байта) */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
 	static uint8_t bitIndex, byteIndex, bitStuff; // Статичные переменные в ОЗУ (3 байт)
@@ -235,20 +236,21 @@ _disable_oci:
 /* Конец ISR(CLUNET_TIMER_COMP_VECTOR) */
 
 
-/* Процедура внешнего прерывания по фронту и спаду сигнала */
+/* Процедура внешнего прерывания по фронту и спаду сигнала (ОЗУ: 4 байта) */
 ISR(CLUNET_INT_VECTOR)
 {
 
-	static uint8_t bitIndex, byteIndex, bitStuff, tickSync;
+	static uint8_t bitIndex, byteIndex, bitStuff, tickSync; // Статичные переменные
 
 	uint8_t now, lineFree, bitNum;
 	
 	
-	now = CLUNET_TIMER_REG;		// Текущее значение таймера
-	
-	lineFree = CLUNET_READING ? 0x00 : 0xFF;	// Линия освобождена
+	now = CLUNET_TIMER_REG; // Текущее значение таймера
 
-	bitNum = 0;
+	// Многоцелевая переменная состояния линии и заполнения байт соответствующими значениями
+	lineFree = CLUNET_READING ? 0x00 : 0xFF;
+
+	bitNum = 0; // Количество прочитанных бит
 
 	if (readingState)
 	{
