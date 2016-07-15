@@ -149,9 +149,6 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		sendingState = CLUNET_SENDING_INIT;
 		byteIndex = bitIndex = 0;
 		bitStuff = 1;
-
-_send_delay_1t:
-
 		CLUNET_TIMER_REG_OCR = lastOCR + CLUNET_T;
 		return;
 	}
