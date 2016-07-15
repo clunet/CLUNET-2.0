@@ -5,7 +5,7 @@
 #include <avr/sleep.h>
 #include "clunet.h"
 
-void data_received(uint8_t src_address, uint8_t command, uint8_t* data, uint8_t size)
+void data_received(uint8_t src_address, uint8_t command, char* data, uint8_t size)
 {
 	;
 }
@@ -16,7 +16,7 @@ int main (void)
 	clunet_set_on_data_received(data_received);
 	sei();
 
-	uint8_t buffer[1];
+	char buffer[1];
 	buffer[0] = 1;
 	clunet_send(CLUNET_BROADCAST_ADDRESS, CLUNET_PRIORITY_MESSAGE, 50, buffer, sizeof(buffer));
 	
