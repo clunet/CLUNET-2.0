@@ -130,7 +130,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	if (sendingState == CLUNET_SENDING_IDLE)
 	{
 		readingState = CLUNET_READING_IDLE;
-		goto _send_end;
+		goto _disable_oci;
 	}
 
 	/* А если мы в ожидании освобождения линии, то начнем передачу через 1Т, предварительно сбросив статус чтения */
@@ -141,7 +141,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		byteIndex = bitIndex = 0;
 		bitStuff = 1;
 
-_send_delay:
+_send_delay_1t:
 
 		CLUNET_TIMER_REG_OCR += CLUNET_T;
 		return;
@@ -150,7 +150,7 @@ _send_delay:
 	else if (!(sendingState == CLUNET_SENDING_INIT && !bitIndex) && !lineFree && !readingBitNumSync)
 	{
 		sendingState = CLUNET_SENDING_WAIT;
-		goto _send_end;
+		goto _disable_oci;
 	}
 
 	// Переменная количества передаваемых бит
@@ -212,13 +212,13 @@ _send_data:
 			if (lineFree)
 			{
 				sendingState = CLUNET_SENDING_IDLE;
-_send_end:
+_disable_oci:
 				CLUNET_DISABLE_TIMER_COMP;
 				return;
 			}
 			// Иначе если была отпущена (последний бит 0), то сделаем короткий импульс 1Т
 			else
-				goto _send_delay;
+				goto _send_delay_1t;
 
 	}
 	
