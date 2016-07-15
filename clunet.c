@@ -57,11 +57,12 @@ const static char devName[] = CLUNET_DEVICE_NAME; // Имя устройства
 static char
 check_crc(const char* data, const uint8_t size)
 {
-      uint8_t crc = 0;
-      uint8_t i, j;
-      for (i = 0; i < size; i++)
+      uint8_t crc, a, b;
+      a = crc = 0;
+      do
       {
-            char inbyte = data[i];
+            char inbyte = data[a];
+            b = 0;
             do
             {
                   uint8_t mix = (crc ^ inbyte) & 1;
@@ -69,8 +70,9 @@ check_crc(const char* data, const uint8_t size)
                   if (mix) crc ^= 0x8C;
                   inbyte >>= 1;
             }
-            while (++j < 8);
+            while (++b < 8);
       }
+      while (++a < size);
       return crc;
 }
 
