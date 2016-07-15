@@ -51,7 +51,7 @@ static uint8_t readBuffer[CLUNET_READ_BUFFER_SIZE]; // Буфер чтения
 static uint8_t devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
 #endif
 
-/* Функция нахождения контрольной суммы */
+/* Функция нахождения контрольной суммы Maxim iButton 8-bit */
 static char
 check_crc(const uint8_t* data, const uint8_t size)
 {
