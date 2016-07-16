@@ -269,7 +269,7 @@ ISR(CLUNET_INT_VECTOR)
 		uint8_t ticks, period;
 
 		// Цикл подсчета количества бит с момента последней синхронизации по спаду
-		for (ticks = now - tickSync, period = CLUNET_READ1, bitNum = 1 ; ticks >= period ; period += CLUNET_T)
+		for (ticks = now - tickSync, period = (CLUNET_T / 2); ticks >= period; period += CLUNET_T)
 		{
 			if(++bitNum > 10)
 			{
