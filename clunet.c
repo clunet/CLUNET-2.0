@@ -41,10 +41,9 @@ static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uin
 /* Глобальные статические переменные (ОЗУ: 5 байт) */
 static uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
 static uint8_t readingState = CLUNET_READING_IDLE; // Состояние чтения
-static uint8_t readingBitNumSync; // Количество прочитанных бит с момента синхронизации по спаду
+static uint8_t readingSendingActiveBits; // Количество прочитанных бит с момента синхронизации по спаду
 static uint8_t sendingLength; // Длина данных для отправки вместе с заголовком кадра
 static uint8_t sendingPriority; // Приоритет отправляемого пакета (от 1 до 8)
-static uint8_t sendingLastOCR; // Последнее значение регистра сравнения перед изменением
 
 /* Буферы данных */
 static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Буфер передачи
@@ -127,13 +126,11 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 /* Процедура прерывания сравнения таймера (ОЗУ: 3 байта) */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
-	static uint8_t bitIndex, byteIndex, bitStuff; // Статичные переменные в ОЗУ (3 байт)
+	static uint8_t bitIndex, byteIndex, bitStuff, lastActiveBits; // Статичные переменные в ОЗУ (4 байт)
 	uint8_t numBits, prio;
 
 	// Многоцелевая переменная-маска состояния линии и чтения бит данных
 	const uint8_t lineFree = CLUNET_SENDING ? 0x80 : 0x00;
-
-	const uint8_t lastOCR = CLUNET_TIMER_REG_OCR;
 
 	// Если передатчик освободился, сбросим статус чтения и пока сюда не планируем возвращаться
 	if (sendingState == CLUNET_SENDING_IDLE)
@@ -147,17 +144,24 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	{
 		readingState = CLUNET_READING_IDLE;
 		sendingState = CLUNET_SENDING_INIT;
-		byteIndex = bitIndex = 0;
+		lastActiveBits = byteIndex = bitIndex = 0;
 		bitStuff = 1;
-		CLUNET_TIMER_REG_OCR = lastOCR + CLUNET_T;
+_delay_1t:
+		CLUNET_TIMER_REG_OCR += CLUNET_T;
 		return;
 	}
 
-	// Если линия была отпущена и это не было зафиксировано в процедуре внешнего прерывания, то значит возник конфликт на линии, замолкаем
-	else if (!lineFree && !readingBitNumSync && !(sendingState == CLUNET_SENDING_INIT && !bitIndex))
+	// Если мы должны прижать линию, то сравним сколько бит прочитано процедурой внешнего прерывания (чтения), если биты не совпадают, то конфликт - замолкаем
+	else if (!lineFree)
 	{
-		sendingState = CLUNET_SENDING_WAIT;
-		goto _disable_oci;
+		if (readingSendingActiveBits != lastActiveBits)
+		{
+			sendingState = CLUNET_SENDING_WAIT;
+			goto _disable_oci;
+		}
+
+		readingSendingActiveBits = 0;
+
 	}
 
 	// Количество бит для передачи
@@ -228,14 +232,15 @@ _disable_oci:
 
 			// Иначе если заняли, то сделаем короткий стоповый импульс длительностью 1Т
 			else
-				numBits = 1;
+				goto _delay_1t;
 
 	}
-	
-	// Сохраним в ОЗУ для использования в процедуре внешнего прерывания
-	sendingLastOCR = lastOCR;
-	
-	CLUNET_TIMER_REG_OCR = lastOCR + CLUNET_T * numBits;
+
+	// Сохраним сколько единичных бит мы должны передать (на сколько периодов прижать линию)
+	if (!lineFree)
+		lastActiveBits = numBits;
+
+	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
 
 	bitStuff = (numBits == 5);
 
@@ -247,7 +252,7 @@ _disable_oci:
 ISR(CLUNET_INT_VECTOR)
 {
 
-	static uint8_t bitIndex, byteIndex, bitStuff, tickSync; // Статичные переменные
+	static uint8_t bitIndex, byteIndex, bitStuff, tickSync, bitNumSync; // Статичные переменные
 
 	// Текущее значение таймера
 	const uint8_t now = CLUNET_TIMER_REG;
@@ -273,7 +278,7 @@ ISR(CLUNET_INT_VECTOR)
 			}
 		}
 
-		bitNum -= readingBitNumSync;
+		bitNum -= bitNumSync;
 		
 		/* Ошибка: нет битстаффинга */
 		if (bitNum >= 6)
@@ -284,32 +289,14 @@ ISR(CLUNET_INT_VECTOR)
 	// Если линию освободило
 	if (lineFree)
 	{
-		// Если состояние передачи в активной фазе
-		if (sendingState & 3)
-		{
-/*
-			// Найдем разницу времени между тем когда мы оказались здесь и когда отпустили линию
-			int8_t delta = now - sendingLastOCR;
-
-			// Максимальная разница между нашим отпусканием линии и этим прерыванием 0.6Т
-			const int8_t max_delta = (int8_t)((float)CLUNET_T * 0.6f);
-
-			// Если разница во времени более 0.6Т, то конфликт однозначен - отдаем линию другому устройству (арбитраж проигран), но чтение продолжаем :)
-			if (delta >= max_delta)
-			{
-				CLUNET_DISABLE_TIMER_COMP;
-				sendingState = CLUNET_SENDING_WAIT;
-			}
-*/
-		}
 		// Если состояние передачи неактивно либо в ожидании, то запланируем сброс чтения и при необходимости начало передачи
-		else
+		if (!(sendingState & 3))
 		{
 			CLUNET_TIMER_REG_OCR = now + (7*CLUNET_T);
 			CLUNET_ENABLE_TIMER_COMP;
 		}
 
-		readingBitNumSync = bitNum;	// Сохраняем количество прочитанных бит после синхронизации
+		readingSendingActiveBits = bitNumSync = bitNum;	// Сохраняем количество прочитанных бит после синхронизации
 
 	}
 	// Если линию прижало к нулю (все устройства синхронизируются по спаду в независимости от состояний чтения и передачи)
@@ -318,7 +305,7 @@ ISR(CLUNET_INT_VECTOR)
 
 		/* СИНХРОНИЗАЦИЯ ЧТЕНИЯ */
 		tickSync = now;		// Синхронизация времени чтения
-		readingBitNumSync = 0;	// Сброс прочитанных бит после синхронизации
+		bitNumSync = 0;		// Сброс прочитанных бит после синхронизации
 
 		/* СИНХРОНИЗАЦИЯ ПЕРЕДАЧИ И АРБИТРАЖ */
 		// Проверка на конфликт передачи. Если мы в активной фазе передачи, и не жмем линию
@@ -340,7 +327,6 @@ ISR(CLUNET_INT_VECTOR)
 			// Если разница во времени менее 0.3Т, то это рассинхронизация, синхронизируем регистр сравнения и быстро попадаем в прерывание сравнения для продолжения передачи
 			else if (delta > 0)
 				CLUNET_TIMER_REG_OCR = now;
-
 		}
 
 		// Если в ожидании приема пакета, то переходим к фазе начала приемки кадра, обнуляем счетчики и выходим
