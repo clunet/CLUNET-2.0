@@ -40,10 +40,10 @@ static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uin
 
 /* Глобальные статические переменные (ОЗУ: 5 байт) */
 static uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
-static uint8_t readingState = CLUNET_READING_IDLE; // Состояние чтения
-static uint8_t readingSendingActiveBits; // Количество прочитанных бит с момента синхронизации по спаду
 static uint8_t sendingLength; // Длина данных для отправки вместе с заголовком кадра
 static uint8_t sendingPriority; // Приоритет отправляемого пакета (от 1 до 8)
+static uint8_t readingState = CLUNET_READING_IDLE; // Состояние чтения
+static uint8_t readingActiveBits; // Количество активных прочитанных бит
 
 /* Буферы данных */
 static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Буфер передачи
@@ -154,14 +154,14 @@ _delay_1t:
 	// Если мы должны прижать линию, то сравним сколько бит прочитано процедурой внешнего прерывания (чтения), если биты не совпадают, то конфликт - замолкаем
 	else if (!lineFree)
 	{
-		if (readingSendingActiveBits != lastActiveBits)
+		if (readingActiveBits != lastActiveBits)
 		{
 			sendingState = CLUNET_SENDING_WAIT;
 			goto _disable_oci;
 		}
 
-		readingSendingActiveBits = 0;
-
+		// Сбросим прочитанные активные биты после проверки
+		readingActiveBits = 0;
 	}
 
 	// Количество бит для передачи
@@ -289,15 +289,20 @@ ISR(CLUNET_INT_VECTOR)
 	// Если линию освободило
 	if (lineFree)
 	{
-		// Если состояние передачи неактивно либо в ожидании, то запланируем сброс чтения и при необходимости начало передачи
+		// Сохраняем количество прочитанных бит после синхронизации (используется в чтении)
+		bitNumSync = bitNum;
+		
+		// Если состояние передачи неактивно либо в ожидании, то запланируем сброс чтения и, при необходимости, начало передачи через 7Т
 		if (!(sendingState & 3))
 		{
 			CLUNET_TIMER_REG_OCR = now + (7*CLUNET_T);
 			CLUNET_ENABLE_TIMER_COMP;
 		}
-
-		readingSendingActiveBits = bitNumSync = bitNum;	// Сохраняем количество прочитанных бит после синхронизации
-
+		
+		// Если состояние передачи активно
+		else
+			// Сохраним количество прочитанных активных бит для проверки в процедуре передачи
+			readingActiveBits = bitNum;
 	}
 	// Если линию прижало к нулю (все устройства синхронизируются по спаду в независимости от состояний чтения и передачи)
 	else
