@@ -123,10 +123,10 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 	}
 }
 
-/* Процедура прерывания сравнения таймера (ОЗУ: 3 байта) */
+/* Процедура прерывания сравнения таймера (ОЗУ: 4 байта) */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
-	static uint8_t bitIndex, byteIndex, bitStuff, lastActiveBits; // Статичные переменные в ОЗУ (4 байт)
+	static uint8_t bitIndex, byteIndex, bitStuff, lastActiveBits; // Статические переменные в ОЗУ (4 байт)
 	uint8_t numBits, prio;
 
 	// Многоцелевая переменная-маска состояния линии и чтения бит данных
@@ -151,9 +151,10 @@ _delay_1t:
 		return;
 	}
 
-	// Если мы должны прижать линию, то сравним сколько бит прочитано процедурой внешнего прерывания (чтения), если биты не совпадают, то конфликт - замолкаем
+	// Если мы должны прижать линию
 	else if (!lineFree)
 	{
+		// Если задание на передачу активных бит не совпадает с фактом, прочтенным в процедуре чтения, то конфликт на линии - останавливаем передачу и ждем
 		if (readingActiveBits != lastActiveBits)
 		{
 			sendingState = CLUNET_SENDING_WAIT;
@@ -248,11 +249,11 @@ _disable_oci:
 /* Конец ISR(CLUNET_TIMER_COMP_VECTOR) */
 
 
-/* Процедура внешнего прерывания по фронту и спаду сигнала (ОЗУ: 4 байта) */
+/* Процедура внешнего прерывания по фронту и спаду сигнала (ОЗУ: 5 байта) */
 ISR(CLUNET_INT_VECTOR)
 {
 
-	static uint8_t bitIndex, byteIndex, bitStuff, tickSync, bitNumSync; // Статичные переменные
+	static uint8_t bitIndex, byteIndex, bitStuff, tickSync, bitNumSync; // Статические переменные (ОЗУ: 5 байт)
 
 	// Текущее значение таймера
 	const uint8_t now = CLUNET_TIMER_REG;
@@ -304,6 +305,7 @@ ISR(CLUNET_INT_VECTOR)
 			// Сохраним количество прочитанных активных бит для проверки в процедуре передачи
 			readingActiveBits = bitNum;
 	}
+	
 	// Если линию прижало к нулю (все устройства синхронизируются по спаду в независимости от состояний чтения и передачи)
 	else
 	{
