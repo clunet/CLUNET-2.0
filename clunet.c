@@ -101,7 +101,7 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 			case CLUNET_COMMAND_DISCOVERY:
 
 				#ifdef CLUNET_DEVICE_NAME
-				clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, devName, sizeof(devName) - 1);
+				clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, devName, sizeof(devName));
 				#else
 				clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, 0, 0);
 				#endif
@@ -144,25 +144,20 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	{
 		readingState = CLUNET_READING_IDLE;
 		sendingState = CLUNET_SENDING_INIT;
-		readingActiveBits = lastActiveBits = byteIndex = bitIndex = 0;
+		byteIndex = bitIndex = 0;
 		bitStuff = 1;
+
 _delay_1t:
+
 		CLUNET_TIMER_REG_OCR += CLUNET_T;
 		return;
 	}
 
-	// Если мы должны прижать линию
-	else if (!lineFree)
+	// Если мы будем прижимать линию, то проверим совпадение переданных и полученных бит, если различны, то конфликт на линии - останавливаем передачу и ждем
+	else if (!lineFree && readingActiveBits != lastActiveBits && !(sendingState == CLUNET_SENDING_INIT && !bitIndex))
 	{
-		// Если задание на передачу активных бит не совпадает с фактом, прочтенным в процедуре чтения, то конфликт на линии - останавливаем передачу и ждем
-		if (readingActiveBits != lastActiveBits)
-		{
-			sendingState = CLUNET_SENDING_WAIT;
-			goto _disable_oci;
-		}
-
-		// Сбросим прочитанные активные биты после проверки
-		readingActiveBits = 0;
+		sendingState = CLUNET_SENDING_WAIT;
+		goto _disable_oci;
 	}
 
 	// Количество бит для передачи
@@ -225,10 +220,14 @@ _send_data:
 			// Если линию отпустили, то стоповый бит не требуется, во внешнем прерывании запланируются все необходимые действия
 			if (lineFree)
 			{
+
 				sendingState = CLUNET_SENDING_IDLE;
+
 _disable_oci:
+
 				CLUNET_DISABLE_TIMER_COMP;
 				return;
+
 			}
 
 			// Иначе если заняли, то сделаем короткий стоповый импульс длительностью 1Т
@@ -343,6 +342,7 @@ ISR(CLUNET_INT_VECTOR)
 			bitStuff = byteIndex = bitIndex = 0;
 			return;
 		}
+
 	}
 
 
