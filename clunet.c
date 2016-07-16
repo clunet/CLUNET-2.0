@@ -144,7 +144,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	{
 		readingState = CLUNET_READING_IDLE;
 		sendingState = CLUNET_SENDING_INIT;
-		lastActiveBits = byteIndex = bitIndex = 0;
+		readingActiveBits = lastActiveBits = byteIndex = bitIndex = 0;
 		bitStuff = 1;
 _delay_1t:
 		CLUNET_TIMER_REG_OCR += CLUNET_T;
