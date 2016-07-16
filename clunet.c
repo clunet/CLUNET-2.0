@@ -101,7 +101,7 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 			case CLUNET_COMMAND_DISCOVERY:
 
 				#ifdef CLUNET_DEVICE_NAME
-				clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, devName, sizeof(devName));
+				clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, devName, sizeof(devName) - 1);
 				#else
 				clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, 0, 0);
 				#endif
