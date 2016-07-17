@@ -1,8 +1,8 @@
 # CLUNET 2.0
 Простой протокол передачи данных **CLUNET 2.0** основан на [оригинальном протоколе](https://github.com/ClusterM/clunet) **Алексея Авдюхина** _aka_ **Cluster**.
 <p align="center">
-<b>Видео смонтированное автоматически Google+:</b>
-<iframe width="560" height="315" src="https://www.youtube.com/embed/qK1FTQHJVV8" frameborder="0" allowfullscreen></iframe>
+<b>Видео, смонтированное автоматически Google+</b>
+![Видео](https://www.youtube.com/embed/qK1FTQHJVV8)
 </p>
 ## Основные отличия
 Ниже приведены основные отличия от оригинальной версии протокола:
