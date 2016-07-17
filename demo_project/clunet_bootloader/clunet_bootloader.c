@@ -409,7 +409,7 @@ int main (void)
 	
 	send_firmware_command(COMMAND_FIRMWARE_UPDATE_START);
 
-	if (read() && (SUB_COMMAND == COMMAND_FIRMWARE_UPDATE_INIT))
+	if (read() && (RECEIVED_SUB_COMMAND == COMMAND_FIRMWARE_UPDATE_INIT))
 		firmware_update();
 
 	jump_to_app();
