@@ -38,24 +38,26 @@ static uint8_t buffer[MY_SPM_PAGESIZE + 11];
 
 static void (*jump_to_app)(void) = 0x0000;
 
-static uint8_t
-check_crc(const uint8_t* data, const uint8_t size)
+/* Функция нахождения контрольной суммы Maxim iButton 8-bit */
+static char
+check_crc(const char* data, const uint8_t size)
 {
-      uint8_t crc = 0;
-      uint8_t i, j;
-      for (i = 0; i < size; i++) 
+      char crc = 0;
+      uint8_t a = 0;
+      do
       {
-            uint8_t inbyte = data[i];
-			
-            for (j = 0; j < 8; j++) 
+            uint8_t b = 8;
+            char inbyte = data[a];
+            do
             {
                   uint8_t mix = (crc ^ inbyte) & 1;
                   crc >>= 1;
-                  if (mix)
-					crc ^= 0x8C;
+                  if (mix) crc ^= 0x8C;
                   inbyte >>= 1;
             }
+            while (--b);
       }
+      while (++a < size);
       return crc;
 }
 
@@ -173,7 +175,7 @@ wait_for_impulse()
 
 	uint8_t bitNum, period;
 
-	// Цикл подсчета количества бит с момента последней синхронизации по спаду
+	// Цикл подсчета количества бит
 	for (bitNum = 0, period = (CLUNET_T / 2); ticks >= period; period += CLUNET_T)
 	{
 		/* Ошибка: длина импульса должна быть не более 5 */
