@@ -170,22 +170,19 @@ wait_for_impulse()
 	}
 	while(--i);
 
-	if (ticks < CLUNET_READ1)
-		ticks = 1;
-	else if (ticks < CLUNET_READ2)
-		ticks = 2;
-	else if (ticks < CLUNET_READ3)
-		ticks = 3;
-	else if (ticks < CLUNET_READ4)
-		ticks = 4;
-	else if (ticks < CLUNET_READ5)
-		ticks = 5;
-	/* Ошибка: длина импульса должна быть не более 5 */
-	else
-		return 0;
+
+	uint8_t bitNum, period;
+
+	// Цикл подсчета количества бит с момента последней синхронизации по спаду
+	for (bitNum = 0, period = (CLUNET_T / 2); ticks >= period; period += CLUNET_T)
+	{
+		/* Ошибка: длина импульса должна быть не более 5 */
+		if(++bitNum > 5)
+			return 0;
+	}
 
 	// Возвращаем длину импульса в периодах CLUNET_T, если пришли единички, то старший бит равен 1
-	return (CLUNET_READING) ? ticks : (ticks | 0x80);
+	return CLUNET_READING ? bitNum : (bitNum | 0x80);
 
 }
 
@@ -386,7 +383,7 @@ int main (void)
 	cli();
  	CLUNET_TIMER_INIT;
 	CLUNET_PIN_INIT;
-
+	
 	send_firmware_command(COMMAND_FIRMWARE_UPDATE_START);
 	
 	while(1)
