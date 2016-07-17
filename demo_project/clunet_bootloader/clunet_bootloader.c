@@ -20,8 +20,8 @@
 #define RECEIVED_SUB_COMMAND buffer[CLUNET_OFFSET_DATA]
 
 /* Вспомогательные макросы для передачи пакетов */
-#define WAIT_INTERFRAME(t) { CLUNET_TIMER_REG = 0; while(CLUNET_TIMER_REG < (t*CLUNET_T)) if(CLUNET_READING) CLUNET_TIMER_REG = 0; }
-#define PAUSE(t) { CLUNET_TIMER_REG = 0; while(CLUNET_TIMER_REG < (t*CLUNET_T)); }
+#define WAIT_INTERFRAME(t) { CLUNET_TIMER_REG = 0; while(CLUNET_TIMER_REG <= (t*CLUNET_T)) if(CLUNET_READING) CLUNET_TIMER_REG = 0; }
+#define PAUSE(t) { CLUNET_TIMER_REG = 0; while(CLUNET_TIMER_REG <= (t*CLUNET_T)); }
 
 // Максимальный размер страницы
 #if SPM_PAGESIZE > 128
@@ -67,7 +67,7 @@ send(const char* data, const uint8_t size)
 
 	uint8_t numBits, bitIndex, byteIndex;
 
-	uint8_t crc = check_crc(data, size);
+	char crc = check_crc(data, size);
 
 _repeat:
 
@@ -79,9 +79,9 @@ _repeat:
 
 	byteIndex = bitIndex = 0;
 
-	uint8_t sendingByte = data[0];
+	char sendingByte = data[0];
 	
-	uint8_t xBitMask = 0;		// Битовая маска для целей подсчета бит и получения текущего состояния линии
+	char xBitMask = 0;		// Битовая маска для целей подсчета бит и получения текущего состояния линии
 
 	do
 	{
@@ -114,7 +114,7 @@ _repeat:
 		// Задержка по количеству передаваемых бит
 		uint8_t delay = numBits * CLUNET_T;
 		CLUNET_TIMER_REG = 0;
-		while(CLUNET_TIMER_REG < delay);
+		while(CLUNET_TIMER_REG <= delay);
 		
 		// Конфликт на линии. Ждем и повторяем снова.
 		if(xBitMask && CLUNET_READING)
