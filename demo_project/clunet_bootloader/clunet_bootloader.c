@@ -328,11 +328,11 @@ firmware_update()
 									CLUNET_COMMAND_BOOT_CONTROL,
 									3, // размер данных
 									COMMAND_FIRMWARE_UPDATE_READY,
-									MY_SPM_PAGESIZE >> 8,
-									MY_SPM_PAGESIZE
+									MY_SPM_PAGESIZE,
+									MY_SPM_PAGESIZE >> 8
 								};
 
-	send_firmware_command(COMMAND_FIRMWARE_UPDATE_START);
+	send(update_start_command, sizeof(update_start_command));
 	
 	while(1)
 	{
@@ -388,7 +388,9 @@ int main (void)
 	CLUNET_PIN_INIT;
 	
 	send_firmware_command(COMMAND_FIRMWARE_UPDATE_START);
-	
+
+	if (read() && (SUB_COMMAND == COMMAND_FIRMWARE_UPDATE_INIT))
+		firmware_update();
 
 	jump_to_app();
 
