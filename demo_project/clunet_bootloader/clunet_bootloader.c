@@ -385,9 +385,8 @@ int main (void)
 
 	cli();
  	CLUNET_TIMER_INIT;
-	CLUNET_READ_INIT;
-	CLUNET_SEND_INIT;
-	
+	CLUNET_PIN_INIT;
+
 	send_firmware_command(COMMAND_FIRMWARE_UPDATE_START);
 	
 	while(1)
