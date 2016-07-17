@@ -419,9 +419,8 @@ void
 clunet_init()
 {
 	sei();
-	CLUNET_SEND_INIT;
-	CLUNET_READ_INIT;
 	CLUNET_TIMER_INIT;
+	CLUNET_PIN_INIT;
 	CLUNET_INT_INIT;
 	char reset_source = MCUSR;
 	clunet_send (
