@@ -13,16 +13,9 @@
 #define CLUNET_SEND_BUFFER_SIZE 128
 #define CLUNET_READ_BUFFER_SIZE 128
 
-/* Pin to send data */
-#define CLUNET_WRITE_PORT D
-#define CLUNET_WRITE_PIN 1
-
-/* Using transistor? */
-#define CLUNET_WRITE_TRANSISTOR
-
-/* Pin to receive data, external interrupt required! */
-#define CLUNET_READ_PORT D
-#define CLUNET_READ_PIN 2
+/* MCUs pin, external interrupt required! */
+#define CLUNET_PORT D
+#define CLUNET_PIN 2
 
 /* Timer prescaler */
 #define CLUNET_TIMER_PRESCALER 64
