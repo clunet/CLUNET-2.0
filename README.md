@@ -4,7 +4,7 @@
 В нижеприведенной таблице приведены основные отличия от оригинальной версии протокола:
 
 | CLUNET 2.0 | Original CLUNET |
-| - |:-:|
+| ------------- |:-------------:|
 | col 3 is      | right-aligned |
 | col 2 is      | centered      |
 | zebra stripes | are neat      |
