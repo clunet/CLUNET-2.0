@@ -176,6 +176,7 @@ _send_data:
 			// Если мы прижали линию, то ищем единичные биты, иначе - нулевые
 			while (((sendBuffer[byteIndex] << bitIndex) & 0x80) ^ lineFree)
 			{
+				numBits++;
 				/* Если передан байт данных */
 				if (++bitIndex & 8)
 				{
@@ -185,14 +186,10 @@ _send_data:
 
 					/* Иначе передача всех данных закончена */
 					else
-					{
 						sendingState = CLUNET_SENDING_STOP;
-						numBits++;
-						break;
-					}
 				}
 				/* Нам нужно не более 5 бит, выходим из цикла */
-				if (++numBits == 5)
+				if (numBits == 5)
 					break;
 			}
 			
