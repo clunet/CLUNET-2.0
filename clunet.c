@@ -85,7 +85,7 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 
 	if ((src_address != CLUNET_DEVICE_ID) && ((dst_address == CLUNET_DEVICE_ID) || (dst_address == CLUNET_BROADCAST_ADDRESS)))
 	{
-		// Команда перезагрузки
+		/* Команда перезагрузки */
 		if (command == CLUNET_COMMAND_REBOOT)
 		{
 			cli();
@@ -132,7 +132,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	// Многоцелевая переменная-маска состояния линии и чтения бит данных
 	const uint8_t lineFree = CLUNET_SENDING ? 0x80 : 0x00;
 
-	// Если передатчик освободился, сбросим статус чтения и пока сюда не планируем возвращаться
+	/* Если передатчик освободился, сбросим статус чтения и пока сюда не планируем возвращаться */
 	if (sendingState == CLUNET_SENDING_IDLE)
 	{
 		readingState = CLUNET_READING_IDLE;
@@ -146,9 +146,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		sendingState = CLUNET_SENDING_INIT;
 		byteIndex = bitIndex = 0;
 		bitStuff = 1;
-
 _delay_1t:
-
 		CLUNET_TIMER_REG_OCR += CLUNET_T;
 		return;
 	}
@@ -171,7 +169,6 @@ _delay_1t:
 	{
 		// Главная фаза передачи данных
 		case CLUNET_SENDING_DATA:
-			
 _send_data:
 			// Если мы прижали линию, то ищем единичные биты, иначе - нулевые
 			while (((sendBuffer[byteIndex] << bitIndex) & 0x80) ^ lineFree)
@@ -203,12 +200,11 @@ _send_data:
 			while (((prio << bitIndex) & 0x80) ^ lineFree)
 			{
 				numBits++;
-
-				// Если отправлены все биты приоритета
+				/* Если отправлены все биты приоритета */
 				if(++bitIndex == 3)
 				{
-					sendingState = CLUNET_SENDING_DATA;
 					bitIndex = 0;
+					sendingState = CLUNET_SENDING_DATA;
 					goto _send_data; // Уходим в часть кода, занимающейся отправкой данных
 				}
 			}
@@ -221,14 +217,10 @@ _send_data:
 			// Если линию отпустили, то стоповый бит не требуется, во внешнем прерывании запланируются все необходимые действия
 			if (lineFree)
 			{
-
 				sendingState = CLUNET_SENDING_IDLE;
-
 _disable_oci:
-
 				CLUNET_DISABLE_TIMER_COMP;
 				return;
-
 			}
 
 			// Иначе если заняли, то сделаем короткий стоповый импульс длительностью 1Т
