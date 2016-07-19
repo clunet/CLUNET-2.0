@@ -111,15 +111,11 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 			case CLUNET_COMMAND_PING:
 
 				clunet_send(src_address, CLUNET_PRIORITY_COMMAND, CLUNET_COMMAND_PING_REPLY, data, size);
-				break;
-
-			default:
-
-				if (cbDataReceived)
-					(*cbDataReceived)(src_address, command, data, size);
-
 			}
+			return;
 		}
+		if (cbDataReceived)
+			(*cbDataReceived)(src_address, command, data, size);
 	}
 }
 
