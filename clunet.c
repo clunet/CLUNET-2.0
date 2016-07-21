@@ -105,14 +105,14 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 				#else
 				clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, 0, 0);
 				#endif
-				break;
+				return;
 
 			/* Ответ на пинг */
 			case CLUNET_COMMAND_PING:
 
 				clunet_send(src_address, CLUNET_PRIORITY_COMMAND, CLUNET_COMMAND_PING_REPLY, data, size);
+				return;
 			}
-			return;
 		}
 		if (cbDataReceived)
 			(*cbDataReceived)(src_address, command, data, size);
