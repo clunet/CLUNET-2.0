@@ -210,7 +210,7 @@ _repeat:
 		
 		// Задержка по количеству передаваемых бит и проверка на конфликт с синхронизацией при передаче
 		uint8_t delta;
-		uint8_t stop = 1 + numBits * CLUNET_T;
+		uint8_t stop = numBits * CLUNET_T;
 		CLUNET_TIMER_REG = 0;
 		do
 		{
