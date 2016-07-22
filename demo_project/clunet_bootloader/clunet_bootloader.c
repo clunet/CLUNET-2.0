@@ -68,12 +68,12 @@ const uint8_t max_delta = (uint8_t)((float)CLUNET_T * 0.3f);
 static void
 wait_interframe()
 {
-	uint8_t stop, delta;
+	uint8_t delta;
 _loop:
-	stop = CLUNET_TIMER_REG + (8 * CLUNET_T + 1);
+	CLUNET_TIMER_REG = 0;
 	do
 	{
-		delta = stop - CLUNET_TIMER_REG;
+		delta = (8 * CLUNET_T) - CLUNET_TIMER_REG;
 		if (CLUNET_READING)
 		{
 			if (delta > max_delta)
