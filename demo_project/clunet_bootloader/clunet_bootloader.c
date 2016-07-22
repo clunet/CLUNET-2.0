@@ -90,20 +90,42 @@ _loop:
 	Первый аргумент - что ждем (1 - доминантный, 0 - рецессивный), второй аргумент если 0, то ждем бесконечно, иначе возвращаем количество прочитанных бит.
 */
 static uint8_t
-wait_for_signal(uint8_t signal, uint8_t reading)
+wait_for_signal(const uint8_t signal, const uint8_t reading)
 {
-	uint8_t ticks = CLUNET_TIMER_REG;
+	uint16_t overflows;
+	uint8_t ticks, period;
 	uint8_t bitNum = 0;
-	uint8_t period = CLUNET_T / 2;
+
+	if (reading)
+	{
+		ticks = CLUNET_TIMER_REG;
+		period = CLUNET_T / 2;
+	}
+	else
+	{
+		CLUNET_TIMER_REG = 0;
+		CLUNET_TIMER_OVERFLOW_CLEAR;
+		overflows = 0;
+	}
 
 	while (CLUNET_READING != signal)
 	{
-		ticks = CLUNET_TIMER_REG - ticks;
-		if (reading && ticks >= period)
+		if (reading)
 		{
-			if (++bitNum > 5)
-				return 0;
-			period += CLUNET_T;
+			ticks = CLUNET_TIMER_REG - ticks;
+			if (ticks >= period)
+			{
+				if (++bitNum > 5)
+					return 0;
+				period += CLUNET_T;
+			}
+		}
+		else if (CLUNET_TIMER_OVERFLOW)
+		{
+			// Ожидаем пакет в течение таймаута, заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах)
+			if (++overflows == BOOTLOADER_TIMEOUT_OVERFLOWS)
+				return 0xFF;
+			CLUNET_TIMER_OVERFLOW_CLEAR;
 		}
 	}
 
