@@ -115,6 +115,7 @@ wait_for_signal(const uint8_t signal, const uint8_t reading)
 			ticks = CLUNET_TIMER_REG - ticks;
 			if (ticks >= period)
 			{
+				// Ошибка: не может быть больше 5 бит
 				if (++bitNum > 5)
 					return 0;
 				period += CLUNET_T;
@@ -166,11 +167,12 @@ send(const char* data, const uint8_t size)
 
 _repeat:
 
-	wait_interframe();			// Ждем межкадровое пространство и начинаем передачу
+	// Ждем освобождения линии и межкадровое пространство в блокирующем режиме (в конце концов замкнутая накоротко линия это ненормально)
+	wait_interframe();
 	
 	CLUNET_SEND_1;
 
-	numBits = 4;				// Начинаем с посылки 4 бит (стартовый и 3 бита приоритета). Наивысший приоритет только у служебных приоритетных пакетов.
+	numBits = 4;	// Начинаем с посылки 4 бит (стартовый и 3 бита приоритета). Наивысший приоритет только у служебных приоритетных пакетов.
 
 	byteIndex = bitIndex = 0;
 
@@ -233,56 +235,6 @@ _repeat:
 }
 
 /*
-static uint8_t
-wait_for_impulse()
-{
-	uint8_t ticks = 0;
-	uint16_t overflows = 0;
-
-	CLUNET_TIMER_REG = 0;
-	CLUNET_TIMER_OVERFLOW_CLEAR;
-
-	uint8_t i = 2;
-
-	do
-	{
-
-		while(CLUNET_READING != CLUNET_READING)
-			if (CLUNET_TIMER_OVERFLOW)
-			{
-				// Ожидаем пакет в течение таймаута, заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах)
-				if (++overflows == BOOTLOADER_TIMEOUT_OVERFLOWS)
-					return 0;
-
-				CLUNET_TIMER_OVERFLOW_CLEAR;
-
-			}
-
-		ticks = CLUNET_TIMER_REG - ticks;
-	
-		// на 2-м проходе переполнение не должно быть более 1 раза, иначе ошибка
-		overflows = (BOOTLOADER_TIMEOUT_OVERFLOWS - 2);
-
-	}
-	while(--i);
-
-
-	uint8_t bitNum, period;
-
-	// Цикл подсчета количества бит
-	for (bitNum = 0, period = (CLUNET_T / 2); ticks >= period; period += CLUNET_T)
-	{
-		// Ошибка: длина импульса должна быть не более 5
-		if(++bitNum > 5)
-			return 0;
-	}
-
-	// Возвращаем длину импульса в периодах CLUNET_T, если пришли единички, то старший бит равен 1
-	return CLUNET_READING ? bitNum : (bitNum | 0x80);
-
-}
-*/
-/*
 	ЧТЕНИЕ СИСТЕМНЫХ ПАКЕТОВ ОБНОВЛЕНИЯ
 	static uint8_t read(void)
 	
@@ -294,10 +246,12 @@ wait_for_impulse()
 static uint8_t
 read()
 {
-	// Ждем межкадровое пространство и переходим в ожидание сигнала на линии
+	// Ждем освобождения линии и межкадровое пространство в блокирующем режиме (в конце концов замкнутая накоротко линия это ненормально)
 	wait_interframe();
-	// Ждем доминантный сигнал бесконечно долго
-	wait_for_signal(1, 0);
+	// Ожидаем начала передачи в течении таймаута, заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах)
+	// Если не дожидаемся - выходим
+	if (wait_for_signal(1, 0))
+		return 0;
 	// Ждем рецессивный сигнал и получаем первые данные
 	uint8_t bitNum = wait_for_signal(0, 1);
 	
