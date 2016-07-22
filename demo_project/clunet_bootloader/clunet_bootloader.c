@@ -100,8 +100,7 @@ _clear:
 			// Ожидаем пакет в течение таймаута, заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах)
 			if (++overflows == BOOTLOADER_TIMEOUT_OVERFLOWS)
 				return 1;
-			else
-				goto _clear;
+			goto _clear;
 		}
 	}
 	return 0;
