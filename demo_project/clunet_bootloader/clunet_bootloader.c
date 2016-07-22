@@ -58,8 +58,11 @@ static char buffer[MY_SPM_PAGESIZE + 11];
 static void (*jump_to_app)(void) = 0x0000;
 
 
-/* Встраиваемая функция ожидания освобождения линии */
-static inline void
+/*
+	Функция ожидания межкадрового интервала заданной длины.
+	Блокирует управление до обнаружения интервала.
+*/
+static void
 wait_interframe(const uint8_t periods)
 {
 	uint8_t stop;
