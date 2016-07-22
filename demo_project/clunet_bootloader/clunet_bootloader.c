@@ -62,7 +62,7 @@ static void (*jump_to_app)(void) = 0x0000;
 	Функция ожидания межкадрового интервала с погрешностью 0.3Т.
 	Блокирует управление до обнаружения интервала.
 */
-static void
+static uint8_t
 wait_interframe()
 {
 	uint8_t stop, delta;
@@ -78,10 +78,11 @@ _loop:
 			if (delta > max_delta)
 				goto _loop;
 			else
-				break;
+				return 0xFF;
 		}
 	}
 	while (delta);
+	return 0x00;
 }
 
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
