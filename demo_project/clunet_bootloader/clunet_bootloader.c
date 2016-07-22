@@ -90,7 +90,7 @@ static uint8_t
 wait_for_start()
 {
 	CLUNET_TIMER_REG = 0;
-	uint16_t overflows = 0;
+	uint16_t overflows = BOOTLOADER_TIMEOUT_OVERFLOWS;
 _clear:
 	CLUNET_TIMER_OVERFLOW_CLEAR;
 	while (!CLUNET_READING)
@@ -98,7 +98,7 @@ _clear:
 		if (CLUNET_TIMER_OVERFLOW)
 		{
 			// Ожидаем пакет в течение таймаута, заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах)
-			if (++overflows == BOOTLOADER_TIMEOUT_OVERFLOWS)
+			if (!--overflows)
 				return 1;
 			goto _clear;
 		}
