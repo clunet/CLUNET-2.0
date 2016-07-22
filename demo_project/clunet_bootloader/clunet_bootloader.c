@@ -208,9 +208,10 @@ _repeat:
 				break;
 		}
 		
-		// Задержка по количеству передаваемых бит и проверка на конфликт
+		// Задержка по количеству передаваемых бит и проверка на конфликт с синхронизацией при передаче
 		uint8_t delta;
-		uint8_t stop = CLUNET_TIMER_REG + numBits * CLUNET_T + 1;
+		uint8_t stop = 1 + numBits * CLUNET_T;
+		CLUNET_TIMER_REG = 0;
 		do
 		{
 			delta = stop - CLUNET_TIMER_REG;
