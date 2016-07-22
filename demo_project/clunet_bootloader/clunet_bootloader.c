@@ -59,24 +59,27 @@ static void (*jump_to_app)(void) = 0x0000;
 
 
 /*
-	Функция ожидания межкадрового интервала заданной длины.
+	Функция ожидания межкадрового интервала с погрешностью 0.3Т.
 	Блокирует управление до обнаружения интервала.
 */
 static void
-wait_interframe(const uint8_t periods)
+wait_interframe()
 {
 	uint8_t stop, delta;
+	// Максимально допустимая погрешность начала передачи следующего кадра
 	const uint8_t max_delta = (uint8_t)((float)CLUNET_T * 0.3f);
 _loop:
-	stop = CLUNET_TIMER_REG + periods * CLUNET_T;
+	stop = CLUNET_TIMER_REG + (8 * CLUNET_T + 1);
 	do
 	{
 		delta = stop - CLUNET_TIMER_REG;
 		if (CLUNET_READING)
+		{
 			if (delta > max_delta)
 				goto _loop;
 			else
 				break;
+		}
 	}
 	while (delta);
 }
