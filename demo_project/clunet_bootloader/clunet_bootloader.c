@@ -85,7 +85,7 @@ _loop:
 	while (delta);
 }
 
-/* Функция ожидания начала кадра */
+/* Функция ожидания начала кадра в течении таймаута, заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах) */
 static uint8_t
 wait_for_start()
 {
@@ -97,7 +97,6 @@ _clear:
 	{
 		if (CLUNET_TIMER_OVERFLOW)
 		{
-			// Ожидаем пакет в течение таймаута, заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах)
 			if (--overflows)
 				goto _clear;
 			return 1;
@@ -106,6 +105,7 @@ _clear:
 	return 0;
 }
 
+/* Функция чтения длительности заданного типа сигнала (если signal != 0, то доминантный, иначе рецессивный) */
 static uint8_t
 read_signal(const uint8_t signal)
 {
@@ -122,7 +122,6 @@ read_signal(const uint8_t signal)
 			period += CLUNET_T;
 		}
 	}
-
 	// Возвращаем количество принятых бит
 	return bitNum;
 }
