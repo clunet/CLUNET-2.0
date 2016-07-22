@@ -40,8 +40,7 @@ SOFTWARE.
 #define RECEIVED_SUB_COMMAND buffer[CLUNET_OFFSET_DATA]
 
 /* Вспомогательные макросы для передачи пакетов */
-#define WAIT_INTERFRAME(t) { CLUNET_TIMER_REG = 0; while(CLUNET_TIMER_REG <= (t*CLUNET_T)) if(CLUNET_READING) CLUNET_TIMER_REG = 0; }
-#define PAUSE(t) { CLUNET_TIMER_REG = 0; while(CLUNET_TIMER_REG <= (t*CLUNET_T)); }
+#define PAUSE(t) { uint8_t _top = CLUNET_TIMER_REG + (t * CLUNET_T); while (CLUNET_TIMER_REG != _top); }
 
 // Максимальный размер страницы
 #if SPM_PAGESIZE > 128
@@ -57,6 +56,19 @@ SOFTWARE.
 static char buffer[MY_SPM_PAGESIZE + 11];
 
 static void (*jump_to_app)(void) = 0x0000;
+
+
+/* Встраиваемая функция ожидания освобождения линии */
+static inline void
+wait_interframe(const uint8_t periods)
+{
+	uint8_t stop;
+_loop:
+	stop = CLUNET_TIMER_REG + periods * CLUNET_T;
+	while (CLUNET_TIMER_REG != stop)
+		if (CLUNET_READING)
+			goto _loop;
+}
 
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
 static char
@@ -91,7 +103,7 @@ send(const char* data, const uint8_t size)
 
 _repeat:
 
-	WAIT_INTERFRAME(8);			// Ждем межкадровое пространство длиной 8Т и начинаем передачу
+	wait_interframe(8);			// Ждем межкадровое пространство длиной 8Т и начинаем передачу
 	
 	CLUNET_SEND_1;
 
@@ -127,16 +139,16 @@ _repeat:
 					break;
 			}
 
-			if(numBits == 5)
+			if (numBits == 5)
 				break;
 		}
 		
 		// Задержка по количеству передаваемых бит
 		uint8_t stop = CLUNET_TIMER_REG + numBits * CLUNET_T;
-		while(CLUNET_TIMER_REG != stop);
+		while (CLUNET_TIMER_REG != stop);
 		
 		// Конфликт на линии. Ждем и повторяем снова.
-		if(xBitMask && CLUNET_READING)
+		if (xBitMask && CLUNET_READING)
 			goto _repeat;
 		
 		CLUNET_SEND_INVERT;
@@ -220,7 +232,7 @@ static uint8_t
 read()
 {
 
-	WAIT_INTERFRAME(7);	// Ждем межкадровое пространство 7Т и переходим в ожидание сигнала на линии
+	wait_interframe(7);	// Ждем межкадровое пространство 7Т и переходим в ожидание сигнала на линии
 
 	uint8_t data = wait_for_impulse();
 	
