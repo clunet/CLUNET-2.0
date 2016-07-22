@@ -40,7 +40,7 @@ SOFTWARE.
 #define RECEIVED_SUB_COMMAND buffer[CLUNET_OFFSET_DATA]
 
 /* Вспомогательные макросы для передачи пакетов */
-#define PAUSE(t) { uint8_t _top = CLUNET_TIMER_REG + (t * CLUNET_T); while (CLUNET_TIMER_REG != _top); }
+#define PAUSE(t) { CLUNET_TIMER_REG = 0; while (CLUNET_TIMER_REG < (t * CLUNET_T)); }
 
 // Максимальный размер страницы
 #if SPM_PAGESIZE > 128
