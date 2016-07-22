@@ -69,7 +69,7 @@ static void
 wait_interframe()
 {
 	uint8_t delta;
-_loop:
+_clear:
 	CLUNET_TIMER_REG = 0;
 	do
 	{
@@ -77,9 +77,8 @@ _loop:
 		if (CLUNET_READING)
 		{
 			if (delta > max_delta)
-				goto _loop;
-			else
-				break;
+				goto _clear;
+			break;
 		}
 	}
 	while (delta);
@@ -161,45 +160,30 @@ _repeat:
 
 	// Ждем освобождения линии и межкадровое пространство в блокирующем режиме (в конце концов замкнутая накоротко линия это ненормально)
 	wait_interframe();
-	
 	CLUNET_SEND_1;
-
 	numBits = 4;	// Начинаем с посылки 4 бит (стартовый и 3 бита приоритета). Наивысший приоритет только у служебных приоритетных пакетов.
-
 	byteIndex = bitIndex = 0;
-
 	char sendingByte = data[0];
-	
 	char xBitMask = 0;		// Битовая маска для целей подсчета бит и получения текущего состояния линии
-
 	do
 	{
-
 		while (((sendingByte << bitIndex) & 0x80) ^ xBitMask)
 		{
-
 			numBits++;
-
 			if (++bitIndex & 8)
 			{
-
 				bitIndex = 0;
-
 				if (++byteIndex < size)
 					sendingByte = data[byteIndex];
-
 				else if (byteIndex == size)
 					sendingByte = crc;
-
 				// Данные закончились
 				else
 					break;
 			}
-
 			if (numBits == 5)
 				break;
 		}
-		
 		// Задержка по количеству передаваемых бит и проверка на конфликт с синхронизацией при передаче
 		uint8_t delta;
 		uint8_t stop = numBits * CLUNET_T;
@@ -211,8 +195,7 @@ _repeat:
 			{
 				if (delta > max_delta)
 					goto _repeat;
-				else
-					break;
+				break;
 			}
 		}
 		while (delta);
