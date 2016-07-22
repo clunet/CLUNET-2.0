@@ -85,17 +85,14 @@ _loop:
 	while (delta);
 }
 
-/*
-	Функция ожидания сигнала.
-	Первый аргумент - что ждем (1 - доминантный, 0 - рецессивный), второй аргумент если 0, то ждем бесконечно, иначе возвращаем количество прочитанных бит.
-*/
+/* Функция ожидания начала кадра */
 static uint8_t
 wait_for_start()
 {
 	CLUNET_TIMER_REG = 0;
-	CLUNET_TIMER_OVERFLOW_CLEAR;
 	uint16_t overflows = 0;
-
+_clear:
+	CLUNET_TIMER_OVERFLOW_CLEAR;
 	while (!CLUNET_READING)
 	{
 		if (CLUNET_TIMER_OVERFLOW)
@@ -103,7 +100,8 @@ wait_for_start()
 			// Ожидаем пакет в течение таймаута, заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах)
 			if (++overflows == BOOTLOADER_TIMEOUT_OVERFLOWS)
 				return 1;
-			CLUNET_TIMER_OVERFLOW_CLEAR;
+			else
+				goto _clear;
 		}
 	}
 	return 0;
