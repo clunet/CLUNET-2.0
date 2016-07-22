@@ -132,9 +132,8 @@ _repeat:
 		}
 		
 		// Задержка по количеству передаваемых бит
-		uint8_t delay = numBits * CLUNET_T;
-		CLUNET_TIMER_REG = 0;
-		while(CLUNET_TIMER_REG <= delay);
+		uint8_t stop = CLUNET_TIMER_REG + numBits * CLUNET_T;
+		while(CLUNET_TIMER_REG != stop);
 		
 		// Конфликт на линии. Ждем и повторяем снова.
 		if(xBitMask && CLUNET_READING)
