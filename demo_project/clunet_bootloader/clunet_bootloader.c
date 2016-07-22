@@ -65,13 +65,20 @@ static void (*jump_to_app)(void) = 0x0000;
 static void
 wait_interframe(const uint8_t periods)
 {
-	uint8_t stop;
+	uint8_t stop, delta;
+	const uint8_t max_delta = (uint8_t)((float)CLUNET_T * 0.3f);
 _loop:
 	stop = CLUNET_TIMER_REG + periods * CLUNET_T;
 	do
+	{
+		delta = stop - CLUNET_TIMER_REG;
 		if (CLUNET_READING)
-			goto _loop;
-	while (CLUNET_TIMER_REG != stop);
+			if (delta > max_delta)
+				goto _loop;
+			else
+				break;
+	}
+	while (delta);
 }
 
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
