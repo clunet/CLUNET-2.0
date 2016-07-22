@@ -65,9 +65,10 @@ wait_interframe(const uint8_t periods)
 	uint8_t stop;
 _loop:
 	stop = CLUNET_TIMER_REG + periods * CLUNET_T;
-	while (CLUNET_TIMER_REG != stop)
+	do
 		if (CLUNET_READING)
 			goto _loop;
+	while (CLUNET_TIMER_REG != stop);
 }
 
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
