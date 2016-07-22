@@ -117,7 +117,7 @@ send(const char* data, const uint8_t size)
 
 _repeat:
 
-	wait_interframe(8);			// Ждем межкадровое пространство длиной 8Т и начинаем передачу
+	wait_interframe();			// Ждем межкадровое пространство и начинаем передачу
 	
 	CLUNET_SEND_1;
 
@@ -246,7 +246,7 @@ static uint8_t
 read()
 {
 
-	wait_interframe(7);	// Ждем межкадровое пространство 7Т и переходим в ожидание сигнала на линии
+	wait_interframe();	// Ждем межкадровое пространство и переходим в ожидание сигнала на линии
 
 	uint8_t data = wait_for_impulse();
 	
