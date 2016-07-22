@@ -134,6 +134,27 @@ wait_for_signal(const uint8_t signal, const uint8_t reading)
 	return bitNum;
 }
 
+static uint8_t
+read_signal(const uint8_t signal)
+{
+	CLUNET_TIMER_REG = 0;
+	uint8_t bitNum = 0;
+	uint8_t period = CLUNET_T / 2;
+	while (!(CLUNET_READING) != !(signal))
+	{
+		if (CLUNET_TIMER_REG >= period)
+		{
+			// Ошибка: не может быть больше 5 бит
+			if (++bitNum > 5)
+				return 0;
+			period += CLUNET_T;
+		}
+	}
+
+	// Возвращаем количество принятых бит
+	return bitNum;
+}
+
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
 static char
 check_crc(const char* data, const uint8_t size)
@@ -262,7 +283,7 @@ read()
 	if (wait_for_signal(1, 0))
 		return 0;
 	// Ждем рецессивный сигнал и получаем первые данные
-	uint8_t bitNum = wait_for_signal(0, 1);
+	uint8_t bitNum = read_signal(0);
 	
 	// Если биты доминантные и их не менее 4 (стартовый + 3 бита приоритета), то этот пакет нам подходит, начнем прием и разбор
 	if (bitNum >= 4)
@@ -277,7 +298,7 @@ read()
 		while(1)
 		{
 		
-			bitNum = wait_for_signal(optByte, 1);
+			bitNum = read_signal(optByte);
 			
 			if (bitNum)
 			{
