@@ -57,18 +57,18 @@ static char buffer[MY_SPM_PAGESIZE + 11];
 
 static void (*jump_to_app)(void) = 0x0000;
 
+// Максимально допустимая погрешность передачи
+const uint8_t max_delta = (uint8_t)((float)CLUNET_T * 0.3f);
+
 
 /*
 	Функция ожидания межкадрового интервала с погрешностью 0.3Т.
 	Блокирует управление до обнаружения интервала.
-	Возвращает: 0 при свободной линии, 255 - при занятой в пределах погрешности.
 */
-static uint8_t
+static void
 wait_interframe()
 {
 	uint8_t stop, delta;
-	// Максимально допустимая погрешность начала передачи следующего кадра
-	const uint8_t max_delta = (uint8_t)((float)CLUNET_T * 0.3f);
 _loop:
 	stop = CLUNET_TIMER_REG + (8 * CLUNET_T + 1);
 	do
@@ -79,11 +79,36 @@ _loop:
 			if (delta > max_delta)
 				goto _loop;
 			else
-				return 0xFF;
+				break;
 		}
 	}
 	while (delta);
-	return 0x00;
+}
+
+/*
+	Функция ожидания сигнала.
+	Первый аргумент - что ждем (1 - доминантный, 0 - рецессивный), второй аргумент если 0, то ждем бесконечно, иначе возвращаем количество прочитанных бит.
+*/
+static uint8_t
+wait_for_signal(uint8_t signal, uint8_t reading)
+{
+	uint8_t ticks = CLUNET_TIMER_REG;
+	uint8_t bitNum = 0;
+	uint8_t period = CLUNET_T / 2;
+
+	while (CLUNET_READING != signal)
+	{
+		ticks = CLUNET_TIMER_REG - ticks;
+		if (reading && ticks >= period)
+		{
+			if (++bitNum > 5)
+				return 0;
+			period += CLUNET_T;
+		}
+	}
+
+	// Возвращаем количество принятых бит
+	return bitNum;
 }
 
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
@@ -185,7 +210,7 @@ _repeat:
 
 }
 
-
+/*
 static uint8_t
 wait_for_impulse()
 {
@@ -225,7 +250,7 @@ wait_for_impulse()
 	// Цикл подсчета количества бит
 	for (bitNum = 0, period = (CLUNET_T / 2); ticks >= period; period += CLUNET_T)
 	{
-		/* Ошибка: длина импульса должна быть не более 5 */
+		// Ошибка: длина импульса должна быть не более 5
 		if(++bitNum > 5)
 			return 0;
 	}
@@ -234,7 +259,7 @@ wait_for_impulse()
 	return CLUNET_READING ? bitNum : (bitNum | 0x80);
 
 }
-
+*/
 /*
 	ЧТЕНИЕ СИСТЕМНЫХ ПАКЕТОВ ОБНОВЛЕНИЯ
 	static uint8_t read(void)
@@ -247,30 +272,31 @@ wait_for_impulse()
 static uint8_t
 read()
 {
-
-	wait_interframe();	// Ждем межкадровое пространство и переходим в ожидание сигнала на линии
-
-	uint8_t data = wait_for_impulse();
+	// Ждем межкадровое пространство и переходим в ожидание сигнала на линии
+	wait_interframe();
+	// Ждем доминантный сигнал бесконечно долго
+	wait_for_signal(1, 0);
+	// Ждем рецессивный сигнал и получаем первые данные
+	uint8_t bitNum = wait_for_signal(0, 1);
 	
 	// Если биты доминантные и их не менее 4 (стартовый + 3 бита приоритета), то этот пакет нам подходит, начнем прием и разбор
-	if (data >= 0x84)
+	if (bitNum >= 4)
 	{
 	
 		uint8_t byteIndex = 0;
+		uint8_t optByte = buffer[0] = 0xFF;
 		uint8_t bitIndex, bitStuff;
 
-		buffer[0] = data;
-		bitIndex = bitStuff = data & 1;
+		bitIndex = bitStuff = bitNum & 1;
 
 		while(1)
 		{
 		
-			data = wait_for_impulse();
+			bitNum = wait_for_signal(optByte, 1);
 			
-			if (data)
+			if (bitNum)
 			{
-				uint8_t bitNum = data & 0x7F;
-				uint8_t optByte = (data & 0x80) ? 0xFF : 0x00;
+				optByte = ~optByte;
 				
 				if (optByte)
 					buffer[byteIndex] |= (255 >> bitIndex);
@@ -278,7 +304,7 @@ read()
 					buffer[byteIndex] &= ~(255 >> bitIndex);
 
 				// Обновим битовый индекс с учетом битстаффинга
-				bitIndex += (bitNum - bitStuff);
+				bitIndex += bitNum - bitStuff;
 
 				if (bitIndex & 8)
 				{
