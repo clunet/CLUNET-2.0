@@ -328,7 +328,7 @@ ISR(CLUNET_INT_VECTOR)
 		if (!readingState)
 		{
 			readingState = CLUNET_READING_START;
-			bitStuff = byteIndex = bitIndex = 0;
+			byteIndex = bitIndex = 0;
 			return;
 		}
 
@@ -394,7 +394,7 @@ ISR(CLUNET_INT_VECTOR)
 			if (bitIndex >= 4)
 			{
 				readBuffer[0] = lineFree;
-				bitIndex -= 4;							// Коррекция индекса чтения бита
+				bitIndex -= 4;					// Коррекция индекса чтения бита
 				readingState = CLUNET_READING_DATA;		// К следующей фазе чтения данных
 			}
 
