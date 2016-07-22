@@ -108,7 +108,7 @@ wait_for_signal(const uint8_t signal, const uint8_t reading)
 		overflows = 0;
 	}
 
-	while (!CLUNET_READING != !signal)
+	while (CLUNET_READING == !signal)
 	{
 		if (reading)
 		{
