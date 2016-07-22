@@ -208,14 +208,22 @@ _repeat:
 				break;
 		}
 		
-		// Задержка по количеству передаваемых бит
-		uint8_t stop = CLUNET_TIMER_REG + numBits * CLUNET_T;
-		while (CLUNET_TIMER_REG != stop);
-		
-		// Конфликт на линии. Ждем и повторяем снова.
-		if (xBitMask && CLUNET_READING)
-			goto _repeat;
-		
+		// Задержка по количеству передаваемых бит и проверка на конфликт
+		uint8_t delta;
+		uint8_t stop = CLUNET_TIMER_REG + numBits * CLUNET_T + 1;
+		do
+		{
+			delta = stop - CLUNET_TIMER_REG;
+			if (xBitMask && CLUNET_READING)
+			{
+				if (delta > max_delta)
+					goto _repeat;
+				else
+					break;
+			}
+		}
+		while (delta);
+
 		CLUNET_SEND_INVERT;
 
 		xBitMask ^= 0x80;
