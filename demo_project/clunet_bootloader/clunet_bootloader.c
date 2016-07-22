@@ -98,9 +98,9 @@ _clear:
 		if (CLUNET_TIMER_OVERFLOW)
 		{
 			// Ожидаем пакет в течение таймаута, заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах)
-			if (!--overflows)
-				return 1;
-			goto _clear;
+			if (--overflows)
+				goto _clear;
+			return 1;
 		}
 	}
 	return 0;
