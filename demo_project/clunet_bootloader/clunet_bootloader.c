@@ -190,10 +190,13 @@ _repeat:
 		CLUNET_TIMER_REG = 0;
 		do
 		{
-			delta = stop - CLUNET_TIMER_REG;
+			uint8_t now = CLUNET_TIMER_REG;
+			delta = stop - now;
 			if (xBitMask && CLUNET_READING)
 			{
-				if (delta > max_delta)
+				if (now <= max_delta)
+					continue;
+				else if (delta > max_delta)
 					goto _repeat;
 				break;
 			}
