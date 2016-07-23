@@ -38,6 +38,7 @@ SOFTWARE.
 
 #define RECEIVED_COMMAND buffer[CLUNET_OFFSET_COMMAND]
 #define RECEIVED_SUB_COMMAND buffer[CLUNET_OFFSET_DATA]
+#define FLASHER_ADDRESS buffer[CLUNET_OFFSET_SRC_ADDRESS]
 
 /* Вспомогательные макросы для передачи пакетов */
 #define PAUSE(t) { CLUNET_TIMER_REG = 0; while (CLUNET_TIMER_REG < (t * CLUNET_T)); }
@@ -355,7 +356,7 @@ send_firmware_command(const uint8_t command)
 
 
 static void
-firmware_update()
+firmware_update(const char flasher_address)
 {
 	static char
 	update_start_command[7] =	{
@@ -373,7 +374,7 @@ firmware_update()
 	while(1)
 	{
 
-		if (read())
+		if (read() && FLASHER_ADDRESS == flasher_address)
 		{
 			uint8_t subCmd = RECEIVED_SUB_COMMAND;
 
@@ -383,17 +384,16 @@ firmware_update()
 			case COMMAND_FIRMWARE_UPDATE_INIT:
 
 				send(update_start_command, sizeof(update_start_command));
-
 				break;
 
 			case COMMAND_FIRMWARE_UPDATE_WRITE:
 			{
 
-			#if (FLASHEND > USHRT_MAX)
+				#if (FLASHEND > USHRT_MAX)
 				uint32_t address = *((uint32_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));
-			#else
+				#else
 				uint16_t address = *((uint16_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));	// Адрес страницы памяти берем начиная с 6-го байта (смещение +5). Размер фиксирован - 32 бит.
-			#endif
+				#endif
 
 				char* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5); // с 10-го байта в пакете (смещение +9) начинаются данные. Размер - MY_SPM_PAGESIZE байт.
 
@@ -408,13 +408,9 @@ firmware_update()
 			case COMMAND_FIRMWARE_UPDATE_DONE:
 
 				jump_to_app();
-
 			}
-
 		}
-
 	}
-	
 }
 
 int main (void)
@@ -427,13 +423,13 @@ int main (void)
 	send_firmware_command(COMMAND_FIRMWARE_UPDATE_START);
 
 	// Делаем 5 попыток получить в ответ служебный пакет, при успехе переходим в режим прошивки, иначе загружаем основную программу
-	uint8_t packets = 0;
+	uint8_t packets = 5;
 	do
 	{
 		if (read() && (RECEIVED_SUB_COMMAND == COMMAND_FIRMWARE_UPDATE_INIT))
-			firmware_update();
+			firmware_update(FLASHER_ADDRESS);
 	}
-	while (++packets <= 5);
+	while (--packets);
 
 	jump_to_app();
 
