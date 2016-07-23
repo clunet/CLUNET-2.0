@@ -193,7 +193,6 @@ _repeat:
 			numBits++;
 			if (++bitIndex & 8)
 			{
-				bitIndex = 0;
 				if (++byteIndex < size)
 					sendingByte = data[byteIndex];
 				else if (byteIndex == size)
@@ -201,6 +200,7 @@ _repeat:
 				// Данные закончились. Выходим.
 				else
 					break;
+				bitIndex = 0;
 			}
 			if (numBits == 5)
 				break;
