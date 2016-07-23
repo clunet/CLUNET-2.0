@@ -58,6 +58,26 @@ static char buffer[MY_SPM_PAGESIZE + 11];
 
 static void (*jump_to_app)(void) = 0x0000;
 
+static char
+control_command[5] =		{
+								CLUNET_DEVICE_ID,
+								CLUNET_BROADCAST_ADDRESS,
+								CLUNET_COMMAND_BOOT_CONTROL,
+								1,	// размер данных
+								0
+							};
+
+static char
+update_init_command[7] =	{
+								CLUNET_DEVICE_ID,
+								CLUNET_BROADCAST_ADDRESS,
+								CLUNET_COMMAND_BOOT_CONTROL,
+								3, // размер данных
+								COMMAND_FIRMWARE_UPDATE_READY,
+								MY_SPM_PAGESIZE,
+								MY_SPM_PAGESIZE >> 8
+							};
+
 // Максимально допустимая рассинхронизация между устройствами сети
 const uint8_t max_delta = (uint8_t)((float)CLUNET_T * 0.3f);
 
@@ -336,90 +356,22 @@ write_flash_page(uint16_t address, char* pagebuffer)
 		boot_rww_enable();
 }
 
-static void
-send_firmware_command(const uint8_t command)
+static inline void
+send_firmware_command(const uint8_t sub_command)
 {
-	static char
-	update_start_command[5] =	{
-									CLUNET_DEVICE_ID,
-									CLUNET_BROADCAST_ADDRESS,
-									CLUNET_COMMAND_BOOT_CONTROL,
-									1,	// размер данных
-									0
-								};
-
-	update_start_command[4] = command;
-
-	send(update_start_command, sizeof(update_start_command));
-
+	control_command[CLUNET_OFFSET_DATA] = sub_command;
+	send(control_command, sizeof(control_command));
 }
 
-
-static void
-firmware_update(const char flasher_address)
-{
-	static char
-	update_start_command[7] =	{
-									CLUNET_DEVICE_ID,
-									CLUNET_BROADCAST_ADDRESS,
-									CLUNET_COMMAND_BOOT_CONTROL,
-									3, // размер данных
-									COMMAND_FIRMWARE_UPDATE_READY,
-									MY_SPM_PAGESIZE,
-									MY_SPM_PAGESIZE >> 8
-								};
-
-	send(update_start_command, sizeof(update_start_command));
-	
-	while(1)
-	{
-
-		if (read() && FLASHER_ADDRESS == flasher_address)
-		{
-			uint8_t subCmd = RECEIVED_SUB_COMMAND;
-
-			switch (subCmd)
-			{
-
-			case COMMAND_FIRMWARE_UPDATE_INIT:
-
-				send(update_start_command, sizeof(update_start_command));
-				break;
-
-			case COMMAND_FIRMWARE_UPDATE_WRITE:
-			{
-
-				#if (FLASHEND > USHRT_MAX)
-				uint32_t address = *((uint32_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));
-				#else
-				uint16_t address = *((uint16_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));	// Адрес страницы памяти берем начиная с 6-го байта (смещение +5). Размер фиксирован - 32 бит.
-				#endif
-
-				char* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5); // с 10-го байта в пакете (смещение +9) начинаются данные. Размер - MY_SPM_PAGESIZE байт.
-
-				write_flash_page(address, pagebuffer); // Пишем во флеш-память
-						
-				send_firmware_command(COMMAND_FIRMWARE_UPDATE_WRITTEN);	// Отправляем подтверждение записи
-
-			}
-
-			break;
-
-			case COMMAND_FIRMWARE_UPDATE_DONE:
-
-				jump_to_app();
-			}
-		}
-	}
-}
 
 int main (void)
 {
+
 	cli();
  	CLUNET_TIMER_INIT;
 	CLUNET_PIN_INIT;
 	
-	// Посылаем пакет, что мы в загрузчике
+	// Посылаем широковещательный пакет, что мы в загрузчике
 	send_firmware_command(COMMAND_FIRMWARE_UPDATE_START);
 
 	// Делаем 5 попыток получить в ответ служебный пакет, при успехе переходим в режим прошивки, иначе загружаем основную программу
@@ -427,9 +379,65 @@ int main (void)
 	do
 	{
 		if (read() && (RECEIVED_SUB_COMMAND == COMMAND_FIRMWARE_UPDATE_INIT))
-			firmware_update(FLASHER_ADDRESS);
+		{
+
+			char flasher_address = FLASHER_ADDRESS; // Запомним, кто инициировал обновление, с тем и будем дальше работать
+
+			// Теперь работаем только с конкретным устройством
+			update_init_command[CLUNET_OFFSET_DST_ADDRESS] = flasher_address;
+			control_command[CLUNET_OFFSET_DST_ADDRESS] = flasher_address;
+
+			// Говорим устройству, что мы в режиме прошивки и сообщаем наш размер страницы памяти
+			send(update_init_command, sizeof(update_init_command));
+			
+			while(1)
+			{
+
+				// Если системный пакет получен и он от нужного устройства, то обработаем его
+				if (read() && FLASHER_ADDRESS == flasher_address)
+				{
+					uint8_t subCmd = RECEIVED_SUB_COMMAND;
+
+					switch (subCmd)
+					{
+
+					case COMMAND_FIRMWARE_UPDATE_WRITE:
+					{
+
+						#if (FLASHEND > USHRT_MAX)
+						uint32_t address = *((uint32_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));
+						#else
+						uint16_t address = *((uint16_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));	// Адрес страницы памяти берем начиная с 6-го байта (смещение +5). Размер фиксирован - 32 бит.
+						#endif
+
+						char* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5); // с 10-го байта в пакете (смещение +9) начинаются данные. Размер - MY_SPM_PAGESIZE байт.
+
+						write_flash_page(address, pagebuffer); // Пишем во флеш-память
+
+						send_firmware_command(COMMAND_FIRMWARE_UPDATE_WRITTEN);	// Отправляем подтверждение записи
+
+					}
+
+					break;
+
+					case COMMAND_FIRMWARE_UPDATE_INIT:
+
+						send(update_init_command, sizeof(update_init_command));
+						break;
+
+
+					case COMMAND_FIRMWARE_UPDATE_DONE:
+
+						goto _done;
+						
+					}
+				}
+			}			
+		}
 	}
 	while (--packets);
+
+_done:
 
 	jump_to_app();
 
