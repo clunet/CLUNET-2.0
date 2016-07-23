@@ -57,13 +57,12 @@ static char buffer[MY_SPM_PAGESIZE + 11];
 
 static void (*jump_to_app)(void) = 0x0000;
 
-// Максимально допустимая погрешность передачи
+// Максимально допустимая рассинхронизация между устройствами сети
 const uint8_t max_delta = (uint8_t)((float)CLUNET_T * 0.3f);
 
 
-/*
-	Функция ожидания межкадрового интервала с погрешностью 0.3Т.
-	Блокирует управление до обнаружения интервала.
+/*	Функция ожидания межкадрового интервала.
+	Блокирует управление до обнаружения интервала или начала передачи от другого устройства в пределах допустимой рассинхронизации.
 */
 static void
 wait_interframe()
@@ -84,7 +83,10 @@ _clear:
 	while (delta);
 }
 
-/* Функция ожидания начала кадра в течении таймаута, заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах) */
+/*	Функция ожидания начала кадра (доминантного бита) в течении таймаута,
+	заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах).
+	Возвращает: 0 при успехе, 1 при прошедшем таймауте ожидания (так никто и не начал передачу)
+*/
 static uint8_t
 wait_for_start()
 {
@@ -93,18 +95,19 @@ wait_for_start()
 _clear:
 	CLUNET_TIMER_OVERFLOW_CLEAR;
 	while (!CLUNET_READING)
-	{
 		if (CLUNET_TIMER_OVERFLOW)
 		{
 			if (--overflows)
 				goto _clear;
 			return 1;
 		}
-	}
 	return 0;
 }
 
-/* Функция чтения длительности заданного типа сигнала (если signal != 0, то доминантный, иначе рецессивный) */
+/*	Функция чтения битовой задержки до заданного типа сигнала.
+	Если signal == 0, то ждем рецессивный (измеряем доминантные биты), иначе наоборот).
+	Возвращает количество прочитанных бит, 0 - при ошибке.
+*/
 static uint8_t
 read_signal(const uint8_t signal)
 {
@@ -112,7 +115,6 @@ read_signal(const uint8_t signal)
 	uint8_t bitNum = 0;
 	uint8_t period = CLUNET_T / 2;
 	while (!(CLUNET_READING) != !(signal))
-	{
 		if (CLUNET_TIMER_REG >= period)
 		{
 			// Ошибка: не может быть больше 5 бит
@@ -120,8 +122,6 @@ read_signal(const uint8_t signal)
 				return 0;
 			period += CLUNET_T;
 		}
-	}
-	// Возвращаем количество принятых бит
 	return bitNum;
 }
 
@@ -158,13 +158,13 @@ send(const char* data, const uint8_t size)
 
 _repeat:
 
-	// Ждем освобождения линии и межкадровое пространство в блокирующем режиме (в конце концов замкнутая накоротко линия это ненормально)
+	// Ждем освобождения линии и межкадровое пространство 8Т в блокирующем режиме (в конце концов замкнутая накоротко линия это ненормально)
 	wait_interframe();
 	CLUNET_SEND_1;
-	numBits = 4;	// Начинаем с посылки 4 бит (стартовый и 3 бита приоритета). Наивысший приоритет только у служебных приоритетных пакетов.
+	numBits = 4; // Начинаем с посылки 4 бит (стартовый и 3 бита приоритета)
 	byteIndex = bitIndex = 0;
 	char sendingByte = data[0];
-	char xBitMask = 0;		// Битовая маска для целей подсчета бит и получения текущего состояния линии
+	char xBitMask = 0; // Битовая маска для целей подсчета бит и получения текущего состояния линии
 	do
 	{
 		while (((sendingByte << bitIndex) & 0x80) ^ xBitMask)
@@ -177,7 +177,7 @@ _repeat:
 					sendingByte = data[byteIndex];
 				else if (byteIndex == size)
 					sendingByte = crc;
-				// Данные закончились
+				// Данные закончились. Выходим.
 				else
 					break;
 			}
@@ -236,29 +236,29 @@ read()
 	// Если не дожидаемся - выходим
 	if (wait_for_start())
 		return 0;
-	// Ждем рецессивный сигнал и получаем первые данные
+	// Читаем доминантные биты
 	uint8_t bitNum = read_signal(0);
 	
 	// Если биты доминантные и их не менее 4 (стартовый + 3 бита приоритета), то этот пакет нам подходит, начнем прием и разбор
 	if (bitNum >= 4)
 	{
 	
-		uint8_t byteIndex = 0;
-		uint8_t optByte = buffer[0] = 0xFF;
 		uint8_t bitIndex, bitStuff;
+		uint8_t byteIndex = 0;
+		uint8_t lineFree = buffer[0] = 0xFF;
 
-		bitIndex = bitStuff = bitNum & 1;
+		bitIndex = bitStuff = bitNum & 1; // Если приняли 5 бит, то битовый индекс и битстаффинг = 1, иначе 0;
 
 		while(1)
 		{
 		
-			bitNum = read_signal(optByte);
+			bitNum = read_signal(lineFree);
 			
 			if (bitNum)
 			{
-				optByte = ~optByte;
+				lineFree = ~lineFree;
 				
-				if (optByte)
+				if (lineFree)
 					buffer[byteIndex] |= (255 >> bitIndex);
 				else
 					buffer[byteIndex] &= ~(255 >> bitIndex);
@@ -276,7 +276,7 @@ read()
 					else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
 					{
 						bitIndex &= 7;
-						buffer[byteIndex] = optByte;
+						buffer[byteIndex] = lineFree;
 					}
 
 					/* Иначе ошибка: нехватка приемного буфера -> игнорируем пакет */
