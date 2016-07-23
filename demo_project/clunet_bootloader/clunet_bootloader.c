@@ -68,7 +68,7 @@ control_command[5] =		{
 							};
 
 static char
-update_init_command[7] =	{
+update_init_response[7] =	{
 								CLUNET_DEVICE_ID,
 								CLUNET_BROADCAST_ADDRESS,
 								CLUNET_COMMAND_BOOT_CONTROL,
@@ -384,11 +384,11 @@ int main (void)
 			char flasher_address = FLASHER_ADDRESS; // Запомним, кто инициировал обновление, с тем и будем дальше работать
 
 			// Теперь работаем только с конкретным устройством
-			update_init_command[CLUNET_OFFSET_DST_ADDRESS] = flasher_address;
+			update_init_response[CLUNET_OFFSET_DST_ADDRESS] = flasher_address;
 			control_command[CLUNET_OFFSET_DST_ADDRESS] = flasher_address;
 
 			// Говорим устройству, что мы в режиме прошивки и сообщаем наш размер страницы памяти
-			send(update_init_command, sizeof(update_init_command));
+			send(update_init_response, sizeof(update_init_response));
 			
 			while(1)
 			{
@@ -422,7 +422,7 @@ int main (void)
 
 					case COMMAND_FIRMWARE_UPDATE_INIT:
 
-						send(update_init_command, sizeof(update_init_command));
+						send(update_init_response, sizeof(update_init_response));
 						break;
 
 
