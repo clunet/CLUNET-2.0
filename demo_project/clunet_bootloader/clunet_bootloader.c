@@ -423,10 +423,17 @@ int main (void)
  	CLUNET_TIMER_INIT;
 	CLUNET_PIN_INIT;
 	
+	// Посылаем пакет, что мы в загрузчике
 	send_firmware_command(COMMAND_FIRMWARE_UPDATE_START);
 
-	if (read() && (RECEIVED_SUB_COMMAND == COMMAND_FIRMWARE_UPDATE_INIT))
-		firmware_update();
+	// Делаем 5 попыток получить в ответ служебный пакет, при успехе переходим в режим прошивки, иначе загружаем основную программу
+	uint8_t packets = 0;
+	do
+	{
+		if (read() && (RECEIVED_SUB_COMMAND == COMMAND_FIRMWARE_UPDATE_INIT))
+			firmware_update();
+	}
+	while (++packets <= 5);
 
 	jump_to_app();
 
