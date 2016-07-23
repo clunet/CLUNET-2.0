@@ -186,11 +186,11 @@ _repeat:
 		}
 		// Задержка по количеству передаваемых бит и проверка на конфликт с синхронизацией при передаче
 		uint8_t delta;
-		uint8_t stop = numBits * CLUNET_T;
+		const uint8_t stop = numBits * CLUNET_T;
 		CLUNET_TIMER_REG = 0;
 		do
 		{
-			uint8_t now = CLUNET_TIMER_REG;
+			const uint8_t now = CLUNET_TIMER_REG;
 			delta = stop - now;
 			if (xBitMask && CLUNET_READING)
 			{
