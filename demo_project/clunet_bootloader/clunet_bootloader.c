@@ -185,9 +185,9 @@ _repeat:
 				break;
 		}
 		// Задержка по количеству передаваемых бит и проверка на конфликт с синхронизацией при передаче
+		CLUNET_TIMER_REG = 0;
 		uint8_t delta;
 		const uint8_t stop = numBits * CLUNET_T;
-		CLUNET_TIMER_REG = 0;
 		do
 		{
 			const uint8_t now = CLUNET_TIMER_REG;
