@@ -68,7 +68,7 @@ control_command[5] =		{
 				};
 
 static char
-update_init_response[7] =	{
+update_init_response[6] =	{
 					CLUNET_DEVICE_ID,
 					CLUNET_BROADCAST_ADDRESS,
 					CLUNET_COMMAND_BOOT_CONTROL,	// команда
