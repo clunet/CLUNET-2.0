@@ -179,7 +179,10 @@ _send_data:
 
 					/* Иначе передача всех данных закончена */
 					else
+					{
 						sendingState = CLUNET_SENDING_STOP;
+						break;
+					}
 				}
 				/* Нам нужно не более 5 бит, выходим из цикла */
 				if (numBits == 5)
