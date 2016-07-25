@@ -60,23 +60,22 @@ static void (*jump_to_app)(void) = 0x0000;
 
 static char
 control_command[5] =		{
-								CLUNET_DEVICE_ID,
-								CLUNET_BROADCAST_ADDRESS,
-								CLUNET_COMMAND_BOOT_CONTROL,
-								1,	// размер данных
-								0
-							};
+					CLUNET_DEVICE_ID,
+					CLUNET_BROADCAST_ADDRESS,
+					CLUNET_COMMAND_BOOT_CONTROL,	// команда
+					1,				// размер данных
+					0				// субкоманда
+				};
 
 static char
 update_init_response[7] =	{
-								CLUNET_DEVICE_ID,
-								CLUNET_BROADCAST_ADDRESS,
-								CLUNET_COMMAND_BOOT_CONTROL,
-								3, // размер данных
-								COMMAND_FIRMWARE_UPDATE_READY,
-								MY_SPM_PAGESIZE,
-								MY_SPM_PAGESIZE >> 8
-							};
+					CLUNET_DEVICE_ID,
+					CLUNET_BROADCAST_ADDRESS,
+					CLUNET_COMMAND_BOOT_CONTROL,	// команда
+					2,				// размер данных
+					COMMAND_FIRMWARE_UPDATE_READY,	// субкоманда
+					MY_SPM_PAGESIZE			// размер страницы
+				};
 
 // Максимально допустимая рассинхронизация между устройствами сети
 const uint8_t max_delta = (uint8_t)((float)CLUNET_T * 0.3f);
