@@ -145,7 +145,7 @@ read_signal(const uint8_t signal)
 			period += CLUNET_T;
 		}
 		state = CLUNET_READING;
-	{
+	}
 	while (state && !signal || !state && signal);
 	return bitNum;
 }
