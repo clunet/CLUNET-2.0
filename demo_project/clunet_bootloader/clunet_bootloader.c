@@ -134,7 +134,9 @@ read_signal(const uint8_t signal)
 	CLUNET_TIMER_REG = 0;
 	uint8_t bitNum = 0;
 	uint8_t period = CLUNET_T / 2;
-	while (!(CLUNET_READING) != !(signal))
+	uint8_t state;
+	do
+	{
 		if (CLUNET_TIMER_REG >= period)
 		{
 			// Ошибка: не может быть больше 5 бит
@@ -142,6 +144,9 @@ read_signal(const uint8_t signal)
 				return 0;
 			period += CLUNET_T;
 		}
+		state = CLUNET_READING;
+	{
+	while (state && !signal || !state && signal);
 	return bitNum;
 }
 
