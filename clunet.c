@@ -50,7 +50,7 @@ static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Буфер передачи
 static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Буфер чтения
 
 #ifdef CLUNET_DEVICE_NAME
-const static char devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
+static const char devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
 #endif
 
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
