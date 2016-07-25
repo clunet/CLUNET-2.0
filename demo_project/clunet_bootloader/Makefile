@@ -66,7 +66,7 @@ CC             = avr-gcc
 
 # Override is only needed by avr-lib build system.
 
-override CFLAGS        = -g -Wall $(OPTIMIZE) -mmcu=$(MCU_TARGET) $(DEFS) -I. -I..
+override CFLAGS        = -g -Wall -Wextra $(OPTIMIZE) -mmcu=$(MCU_TARGET) $(DEFS) -I. -I..
 LDFLAGS       = -Wl,-Map,$(PRG).map
 #override LDFLAGS       =  -Wl,--section-start=.text=$(BOOTSTART)
 LDFLAGS += -Wl,--section-start=.text=$(BOOTSTART)
