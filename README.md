@@ -1,4 +1,4 @@
-# CLUNET 2.0
+# CLUNET 2.0 (alpha development version)
 Простой протокол передачи данных **CLUNET 2.0** основан на [оригинальном протоколе](https://github.com/ClusterM/clunet) **Алексея Авдюхина** _aka_ **Cluster**.
 
 **Bootloader готов к тестированию в папке** `demo_project/clunet_bootloader`. **Понимаю, что без инструментария, а именно адаптера ПК->CLUNET, это весьма проблематично, поэтому его изготовлением на базе [Sparkfun Pro Micro 16MHz](https://www.sparkfun.com/products/12640) и займусь в ближайшее время.**
