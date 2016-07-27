@@ -362,7 +362,7 @@ ISR(CLUNET_INT_VECTOR)
 				// Если пакет прочитан полностью, то проверим контрольную сумму
 				if ((++byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
 				{
-					readingState = CLUNET_READING_IDLE;
+					//readingState = CLUNET_READING_IDLE;
 					// Проверяем CRC, при успехе начнем обработку принятого пакета
 					if (!check_crc(readBuffer, byteIndex))
 						clunet_data_received (
