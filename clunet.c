@@ -244,7 +244,7 @@ _disable_oci:
 ISR(CLUNET_INT_VECTOR)
 {
 
-	static uint8_t bitIndex, byteIndex, bitStuff, tickSync, bitNumSync; // Статические переменные (ОЗУ: 5 байт)
+	static uint8_t bitIndex, byteIndex, bitStuff, tickSync; // Статические переменные (ОЗУ: 4 байт)
 
 	// Текущее значение таймера
 	const uint8_t now = CLUNET_TIMER_REG;
@@ -263,17 +263,16 @@ ISR(CLUNET_INT_VECTOR)
 		// Цикл подсчета количества бит с момента последней синхронизации по спаду
 		for (ticks = now - tickSync, period = (CLUNET_T / 2); ticks >= period; period += CLUNET_T)
 		{
-			if(++bitNum > 10)
+			// Ошибка: нет битстаффинга
+			if(++bitNum > 5)
 			{
 				readingState = CLUNET_READING_ERROR;
 				break;
 			}
 		}
 
-		bitNum -= bitNumSync;
-		
-		/* Ошибка: нет битстаффинга */
-		if (bitNum >= 6)
+		// Ошибка: не может быть нулем
+		if (!bitNum)
 			readingState = CLUNET_READING_ERROR;
 
 	}
@@ -281,8 +280,8 @@ ISR(CLUNET_INT_VECTOR)
 	// Если линию освободило
 	if (lineFree)
 	{
-		// Сохраняем количество прочитанных бит после синхронизации (используется в чтении)
-		bitNumSync = bitNum;
+		// Корректируем время по прочитанным битам
+		tickSync += bitNum * CLUNET_T;
 		
 		// Если состояние передачи неактивно либо в ожидании, то запланируем сброс чтения и, при необходимости, начало передачи через 7Т
 		if (!(sendingState & 3))
@@ -303,7 +302,6 @@ ISR(CLUNET_INT_VECTOR)
 
 		/* СИНХРОНИЗАЦИЯ ЧТЕНИЯ */
 		tickSync = now;		// Синхронизация времени чтения
-		bitNumSync = 0;		// Сброс прочитанных бит после синхронизации
 
 		/* СИНХРОНИЗАЦИЯ ПЕРЕДАЧИ И АРБИТРАЖ */
 		// Проверка на конфликт передачи. Если мы в активной фазе передачи, и не жмем линию
