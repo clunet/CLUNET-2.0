@@ -240,11 +240,11 @@ _disable_oci:
 /* Конец ISR(CLUNET_TIMER_COMP_VECTOR) */
 
 
-/* Процедура внешнего прерывания по фронту и спаду сигнала (ОЗУ: 5 байта) */
+/* Процедура внешнего прерывания по фронту и спаду сигнала (ОЗУ: 4 байта) */
 ISR(CLUNET_INT_VECTOR)
 {
 
-	static uint8_t bitIndex, byteIndex, bitStuff, tickSync; // Статические переменные (ОЗУ: 4 байт)
+	static uint8_t bitIndex, byteIndex, bitStuff, tickSync; // Статические переменные (ОЗУ: 4 байта)
 
 	// Текущее значение таймера
 	const uint8_t now = CLUNET_TIMER_REG;
@@ -362,7 +362,7 @@ ISR(CLUNET_INT_VECTOR)
 				// Если пакет прочитан полностью, то проверим контрольную сумму
 				if ((++byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
 				{
-					//readingState = CLUNET_READING_IDLE;
+					readingState = CLUNET_READING_IDLE;
 					// Проверяем CRC, при успехе начнем обработку принятого пакета
 					if (!check_crc(readBuffer, byteIndex))
 						clunet_data_received (
