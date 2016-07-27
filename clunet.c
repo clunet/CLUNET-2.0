@@ -466,7 +466,7 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 		// Если линия свободна, то запланируем отправку
 		if (!CLUNET_READING)
 		{
-			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7*CLUNET_T);
+			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7 * CLUNET_T + 1);
 			CLUNET_ENABLE_TIMER_COMP;
 		}
 
