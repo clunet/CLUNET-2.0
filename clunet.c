@@ -56,24 +56,24 @@ static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Буфер чтения
 static char
 check_crc(const char* data, const uint8_t size)
 {
-      uint8_t crc = 0;
-      uint8_t a = 0;
-      do
-      {
-            uint8_t b = 8;
-            char inbyte = data[a];
-            do
-            {
-                  uint8_t mix = (crc ^ inbyte) & 1;
-                  crc >>= 1;
-                  if (mix)
-                  	crc ^= 0x8C;
-                  inbyte >>= 1;
-            }
-            while (--b);
-      }
-      while (++a < size);
-      return crc;
+	uint8_t crc = 0;
+	uint8_t a = 0;
+	do
+	{
+		uint8_t b = 8;
+		uint8_t inbyte = data[a];
+		do
+		{
+			uint8_t mix = (crc ^ inbyte) & 1;
+			crc >>= 1;
+			if (mix)
+				crc ^= 0x8C;
+			inbyte >>= 1;
+		}
+		while (--b);
+	}
+	while (++a < size);
+	return crc;
 }
 
 /* Встраиваемая функция обработки входящего пакета */
