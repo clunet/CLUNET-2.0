@@ -18,14 +18,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *****************************************************************************************/
 
-#include "defines.h"
-#include "../defines.h"
 #include "../clunet_config.h"
 #include "clunet.h"
-#include "bits.h"
-#include <avr/io.h>
-#include <avr/boot.h>
-#include <avr/interrupt.h>
 
 #define COMMAND_FIRMWARE_UPDATE_START	0	// Информируем сеть, что мы в загрузчике
 #define COMMAND_FIRMWARE_UPDATE_INIT	1	// Субкоманда инициализации процедуры загрузки прошивки
