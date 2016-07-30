@@ -6,10 +6,24 @@ PROGRAMMER_PORT = usb
 
 # Стартовый адрес загрузчика
 BOOTSTART = 0x1C00
+
 # Размер загрузчика в 16-битных словах (2 байта)
 BOOTSIZE = 512
+
 # Таймаут одной попытки загрузчика получить пакет (в милисекундах)
 BOOTLOADER_TIMEOUT = 1000UL
+
+# Тактовая частота генератора
+F_CPU = 16000000UL
+
+# Уровень оптимизации компилятора
+OPTIMIZE = s
+
+# Директория с основным проектом для которого создаем загрузчик (нужен clunet_config.h)
+PROJECT_PATH		 = ..
+
+# Директория с библиотекой CLUNET (нужен clunet.h)
+CLUNET_PATH		 = ../..
 
 PRG            = clunet_bootloader
 OBJ            = clunet_bootloader.o
@@ -62,9 +76,8 @@ MCU_TARGET     = atmega8
 #MCU_TARGET     = attiny84
 #MCU_TARGET     = attiny85
 #MCU_TARGET     = attiny861
-OPTIMIZE       = -Os
 
-DEFS           =
+DEFS           = -DBOOTSIZE=$(BOOTSIZE) -DBOOTLOADER_TIMEOUT=$(BOOTLOADER_TIMEOUT) -DF_CPU=$(F_CPU)
 LIBS           =
 
 # You should not have to change anything below here.
@@ -73,7 +86,7 @@ CC             = avr-gcc
 
 # Override is only needed by avr-lib build system.
 
-override CFLAGS        = -g -Wall -Wextra $(OPTIMIZE) -mmcu=$(MCU_TARGET) $(DEFS) -I. -I.. -DBOOTSIZE=$(BOOTSIZE) -DBOOTLOADER_TIMEOUT=$(BOOTLOADER_TIMEOUT)
+override CFLAGS        = -g -Wall -Wextra -O$(OPTIMIZE) -mmcu=$(MCU_TARGET) $(DEFS) -I$(PROJECT_PATH) -I$(CLUNET_PATH)
 LDFLAGS       = -Wl,-Map,$(PRG).map
 #override LDFLAGS       =  -Wl,--section-start=.text=$(BOOTSTART)
 LDFLAGS += -Wl,--section-start=.text=$(BOOTSTART)
@@ -87,7 +100,7 @@ $(PRG).elf: $(OBJ)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 # dependency:
-clunet_bootloader.o: clunet_bootloader.c defines.h clunet.h ../clunet_config.h ../defines.h bits.h
+clunet_bootloader.o: clunet_bootloader.c $(CLUNET_PATH)/clunet.h $(PROJECT_PATH)/clunet_config.h
 clean:
 	rm -rf *.o $(PRG).elf *.eps *.png *.pdf *.bak 
 	rm -rf *.lst *.map $(EXTRA_CLEAN_FILES)
