@@ -10,6 +10,8 @@ CLUNET_IP      = 10.13.0.254
 CLUNET_PORT    = 10009
 CLUNET_DEVICE_ID = 99
 
+F_CPU = 16000000UL
+
 #MCU_TARGET     = at90s2313
 #MCU_TARGET     = at90s2333
 #MCU_TARGET     = at90s4414
@@ -69,7 +71,7 @@ CC             = avr-gcc
 
 # Override is only needed by avr-lib build system.
 
-override CFLAGS        = -g -Wall -Wextra $(OPTIMIZE) -mmcu=$(MCU_TARGET) $(DEFS) -I. -I$(CLUNET_PATH)
+override CFLAGS        = -g -Wall -Wextra $(OPTIMIZE) -mmcu=$(MCU_TARGET) $(DEFS) -I. -I$(CLUNET_PATH) -DF_CPU=$(F_CPU)
 override LDFLAGS       = -Wl,-Map,$(PRG).map
 
 OBJCOPY        = avr-objcopy
