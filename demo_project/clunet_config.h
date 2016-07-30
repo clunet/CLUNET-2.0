@@ -21,6 +21,8 @@ SOFTWARE.
 #ifndef __CLUNET_CONFIG_H_INCLUDED__
 #define __CLUNET_CONFIG_H_INCLUDED__
 
+#include "bits.h"
+
 /* CONFIGURE YOUR DEVICE HERE */
 
 /* Device address (0-254) */
