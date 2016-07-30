@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include "clunet.h"
 
 void data_received(uint8_t src_address, uint8_t command, char* data, uint8_t size)
