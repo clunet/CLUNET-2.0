@@ -18,8 +18,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *****************************************************************************************/
 
-#ifndef __clunet_config_h_included__
-#define __clunet_config_h_included__
+#ifndef __CLUNET_CONFIG_H_INCLUDED__
+#define __CLUNET_CONFIG_H_INCLUDED__
 
 /* CONFIGURE YOUR DEVICE HERE */
 
@@ -33,7 +33,7 @@ SOFTWARE.
 #define CLUNET_SEND_BUFFER_SIZE 128
 #define CLUNET_READ_BUFFER_SIZE 128
 
-/* MCUs pin, external interrupt required! */
+/* MCUs pin, external interrupt with any logical change is required! */
 #define CLUNET_PORT D
 #define CLUNET_PIN 2
 
