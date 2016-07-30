@@ -1,19 +1,14 @@
-#include <avr/io.h>
-#include <avr/interrupt.h>
-#include <util/delay.h>
-#include <avr/sleep.h>
 #include "clunet.h"
 
 void data_received(uint8_t src_address, uint8_t command, char* data, uint8_t size)
 {
-	;
+
 }
 
 int main (void)
 {
 	clunet_init();
 	clunet_set_on_data_received(data_received);
-	sei();
 
 	char buffer[1];
 	buffer[0] = 1;
@@ -24,4 +19,3 @@ int main (void)
 	}
 	return 0;
 }
-
