@@ -1,11 +1,18 @@
-PRG            = clunet_bootloader
-OBJ            = clunet_bootloader.o
 LFUSE          = E4
 HFUSE          = DA
 MCU_PROGRAMMER = m8
-PROGRAMMER_TYPE = avrisp2
+PROGRAMMER_TYPE = usbasp
 PROGRAMMER_PORT = usb
+
+# Стартовый адрес загрузчика
 BOOTSTART = 0x1C00
+# Размер загрузчика в 16-битных словах (2 байта)
+BOOTSIZE = 512
+# Таймаут одной попытки загрузчика получить пакет (в милисекундах)
+BOOTLOADER_TIMEOUT = 1000UL
+
+PRG            = clunet_bootloader
+OBJ            = clunet_bootloader.o
 
 #MCU_TARGET     = at90s2313
 #MCU_TARGET     = at90s2333
@@ -66,7 +73,7 @@ CC             = avr-gcc
 
 # Override is only needed by avr-lib build system.
 
-override CFLAGS        = -g -Wall -Wextra $(OPTIMIZE) -mmcu=$(MCU_TARGET) $(DEFS) -I. -I..
+override CFLAGS        = -g -Wall -Wextra $(OPTIMIZE) -mmcu=$(MCU_TARGET) $(DEFS) -I. -I.. -DBOOTSIZE=$(BOOTSIZE) -DBOOTLOADER_TIMEOUT=$(BOOTLOADER_TIMEOUT)
 LDFLAGS       = -Wl,-Map,$(PRG).map
 #override LDFLAGS       =  -Wl,--section-start=.text=$(BOOTSTART)
 LDFLAGS += -Wl,--section-start=.text=$(BOOTSTART)
