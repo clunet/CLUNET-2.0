@@ -22,7 +22,6 @@ SOFTWARE.
 #define __CLUNET_H_INCLUDED__
 
 #include <stdint.h>
-#include "bits.h"
 #include "clunet_config.h"
 
 #define CLUNET_SENDING_IDLE 0
