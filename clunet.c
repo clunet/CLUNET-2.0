@@ -32,7 +32,7 @@ SOFTWARE.
 #include <stdint.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
-
+#include <avr/wdt.h>
 
 /* Указатели на функции обратного вызова при получении пакетов (должны быть как можно короче) (ОЗУ: 4 байта при МК с 16-битной адресацией) */
 static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
@@ -50,7 +50,7 @@ static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Буфер передачи
 static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Буфер чтения
 
 #ifdef CLUNET_DEVICE_NAME
-static const char devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
+ static const char devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
 #endif
 
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
@@ -67,7 +67,8 @@ check_crc(const char* data, const uint8_t size)
             {
                   uint8_t mix = (crc ^ inbyte) & 1;
                   crc >>= 1;
-                  if (mix) crc ^= 0x8C;
+                  if (mix)
+                  	crc ^= 0x8C;
                   inbyte >>= 1;
             }
             while (--b);
@@ -88,9 +89,8 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 		/* Команда перезагрузки */
 		if (command == CLUNET_COMMAND_REBOOT)
 		{
-			cli();
-			set_bit(WDTCR, WDE);
-			while(1);
+			wdt_enable(WDTO_15MS);
+			while (1);
 		}
 
 		if ((sendingState == CLUNET_SENDING_IDLE) || (sendingPriority <= CLUNET_PRIORITY_MESSAGE))
@@ -341,7 +341,6 @@ ISR(CLUNET_INT_VECTOR)
 
 	}
 
-
 	switch (readingState)
 	{
 		// Главная фаза чтения данных
@@ -414,19 +413,20 @@ ISR(CLUNET_INT_VECTOR)
 void
 clunet_init()
 {
-	sei();
+	sendingLength = MCUSR; // Используем переменную sendingLength для отправки содержимого регистра MCUSR
+	MCUSR = 0;
+	wdt_disable();
 	CLUNET_TIMER_INIT;
 	CLUNET_PIN_INIT;
 	CLUNET_INT_INIT;
-	char reset_source = MCUSR;
+	sei();
 	clunet_send (
 		CLUNET_BROADCAST_ADDRESS,
 		CLUNET_PRIORITY_MESSAGE,
 		CLUNET_COMMAND_BOOT_COMPLETED,
-		&reset_source,
-		sizeof(reset_source)
+		&sendingLength,
+		sizeof(sendingLength)
 	);
-	MCUSR = 0;
 }
 
 void
