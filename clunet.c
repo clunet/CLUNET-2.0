@@ -56,7 +56,7 @@ static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Буфер чтения
 static char
 check_crc(const char* data, const uint8_t size)
 {
-      char crc = 0;
+      uint8_t crc = 0;
       uint8_t a = 0;
       do
       {
