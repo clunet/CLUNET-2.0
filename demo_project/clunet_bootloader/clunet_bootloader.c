@@ -18,7 +18,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *****************************************************************************************/
 
-#include "../clunet_config.h"
+#include <avr/boot.h>
+#include <avr/interrupt.h>
 #include "clunet.h"
 
 #define COMMAND_FIRMWARE_UPDATE_START	0	// Информируем сеть, что мы в загрузчике
