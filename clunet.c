@@ -24,8 +24,6 @@ SOFTWARE.
 
 *****************************************************************************************/
 
-#include "clunet_config.h"
-#include "bits.h"
 #include "clunet.h"
 
 #include <stdint.h>
