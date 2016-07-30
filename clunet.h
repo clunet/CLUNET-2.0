@@ -18,8 +18,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *****************************************************************************************/
 
-#ifndef __clunet_h_included__
-#define __clunet_h_included__
+#ifndef __CLUNET_H_INCLUDED__
+#define __CLUNET_H_INCLUDED__
 
 #include <stdint.h>
 #include "bits.h"
