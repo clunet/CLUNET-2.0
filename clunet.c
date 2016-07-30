@@ -424,7 +424,7 @@ clunet_init()
 		CLUNET_BROADCAST_ADDRESS,
 		CLUNET_PRIORITY_MESSAGE,
 		CLUNET_COMMAND_BOOT_COMPLETED,
-		&sendingLength,
+		(char*)&sendingLength,
 		sizeof(sendingLength)
 	);
 }
