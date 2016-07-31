@@ -49,11 +49,11 @@ SOFTWARE.
 #define BOOTLOADER_TIMEOUT_OVERFLOWS ((uint16_t)(((float)BOOTLOADER_TIMEOUT / 1000.0f) * ((float)F_CPU / (float)CLUNET_TIMER_PRESCALER / 256.0f)))
 
 
-static char buffer[MY_SPM_PAGESIZE + 11];
+static uint8_t buffer[MY_SPM_PAGESIZE + 11];
 
 static void (*jump_to_app)(void) = 0x0000;
 
-static char
+static uint8_t
 control_command[5] =		{
 					CLUNET_DEVICE_ID,
 					CLUNET_BROADCAST_ADDRESS,
@@ -62,7 +62,7 @@ control_command[5] =		{
 					0				// субкоманда
 				};
 
-static char
+static uint8_t
 update_init_response[6] =	{
 					CLUNET_DEVICE_ID,
 					CLUNET_BROADCAST_ADDRESS,
@@ -80,7 +80,7 @@ const uint8_t max_delta = (uint8_t)((float)CLUNET_T * 0.3f);
 	Блокирует управление до обнаружения интервала или начала передачи от другого устройства в пределах допустимой рассинхронизации.
 */
 static void
-wait_interframe()
+wait_interframe(void)
 {
 	uint8_t delta;
 _clear:
@@ -103,7 +103,7 @@ _clear:
 	Возвращает: 0 при успехе, 1 при прошедшем таймауте ожидания (так никто и не начал передачу)
 */
 static uint8_t
-wait_for_start()
+wait_for_start(void)
 {
 	CLUNET_TIMER_REG = 0;
 	uint16_t overflows = BOOTLOADER_TIMEOUT_OVERFLOWS;
@@ -146,20 +146,21 @@ read_signal(const uint8_t signal)
 }
 
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
-static char
-check_crc(const char* data, const uint8_t size)
+static uint8_t
+check_crc(const uint8_t* data, const uint8_t size)
 {
-      char crc = 0;
+      uint8_t crc = 0;
       uint8_t a = 0;
       do
       {
             uint8_t b = 8;
-            char inbyte = data[a];
+            uint8_t inbyte = data[a];
             do
             {
                   uint8_t mix = (crc ^ inbyte) & 1;
                   crc >>= 1;
-                  if (mix) crc ^= 0x8C;
+                  if (mix)
+                  	crc ^= 0x8C;
                   inbyte >>= 1;
             }
             while (--b);
@@ -174,7 +175,7 @@ send(const char* data, const uint8_t size)
 
 	uint8_t numBits, bitIndex, byteIndex;
 
-	char crc = check_crc(data, size);
+	uint8_t crc = check_crc(data, size);
 
 _repeat:
 
@@ -183,8 +184,8 @@ _repeat:
 	CLUNET_SEND_1;
 	numBits = 4; // Начинаем с посылки 4 бит (стартовый и 3 бита приоритета)
 	byteIndex = bitIndex = 0;
-	char sendingByte = data[0];
-	char xBitMask = 0; // Битовая маска для целей подсчета бит и получения текущего состояния линии
+	uint8_t sendingByte = data[0];
+	uint8_t xBitMask = 0; // Битовая маска для целей подсчета бит и получения текущего состояния линии
 	do
 	{
 		while (((sendingByte << bitIndex) & 0x80) ^ xBitMask)
@@ -251,7 +252,7 @@ _repeat:
 */
 
 static uint8_t
-read()
+read(void)
 {
 	// Ждем освобождения линии и межкадровое пространство в блокирующем режиме (в конце концов замкнутая накоротко линия это ненормально)
 	wait_interframe();
@@ -365,18 +366,17 @@ send_firmware_command(const uint8_t sub_command)
 
 int main (void)
 {
-
 	cli();
  	CLUNET_TIMER_INIT;
 	CLUNET_PIN_INIT;
 	
-	// Посылаем широковещательный пакет, что мы в загрузчике
-	send_firmware_command(COMMAND_FIRMWARE_UPDATE_START);
-
 	// Делаем 5 попыток получить в ответ служебный пакет, при успехе переходим в режим прошивки, иначе загружаем основную программу
 	uint8_t packets = 5;
 	do
 	{
+		// Посылаем широковещательный пакет, что мы в загрузчике
+		send_firmware_command(COMMAND_FIRMWARE_UPDATE_START);
+
 		if (read() && (RECEIVED_SUB_COMMAND == COMMAND_FIRMWARE_UPDATE_INIT))
 		{
 
@@ -391,7 +391,6 @@ int main (void)
 			
 			while(1)
 			{
-
 				// Если системный пакет получен и он от нужного устройства, то обработаем его
 				if (read() && FLASHER_ADDRESS == flasher_address)
 				{
