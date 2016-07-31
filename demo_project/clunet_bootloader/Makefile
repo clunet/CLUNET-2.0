@@ -1,6 +1,6 @@
 LFUSE          = E4
 HFUSE          = DA
-MCU_PROGRAMMER = m8
+PROGRAMMER_MCU = m8
 PROGRAMMER_TYPE = usbasp
 PROGRAMMER_PORT = usb
 
@@ -169,4 +169,4 @@ pdf: $(PRG).pdf
 	$(FIG2DEV) -L png $< $@
 
 program: hex
-	avrdude -V -p $(MCU_PROGRAMMER) -c $(PROGRAMMER_TYPE) -P $(PROGRAMMER_PORT) -U flash:w:$(PRG).hex -U lfuse:w:0x$(LFUSE):m -U hfuse:w:0x$(HFUSE):m
+	avrdude -V -p $(PROGRAMMER_MCU) -c $(PROGRAMMER_TYPE) -P $(PROGRAMMER_PORT) -U flash:w:$(PRG).hex -U lfuse:w:0x$(LFUSE):m -U hfuse:w:0x$(HFUSE):m
