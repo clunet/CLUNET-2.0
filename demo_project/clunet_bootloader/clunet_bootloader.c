@@ -281,11 +281,13 @@ read(void)
 			if (bitNum)
 			{
 				lineFree = ~lineFree;
+
+				uint8_t mask = 0xFF >> bitIndex;
 				
 				if (lineFree)
-					buffer[byteIndex] |= (255 >> bitIndex);
+					buffer[byteIndex] |= mask;
 				else
-					buffer[byteIndex] &= ~(255 >> bitIndex);
+					buffer[byteIndex] &= ~mask;
 
 				// Обновим битовый индекс с учетом битстаффинга
 				bitIndex += bitNum - bitStuff;
