@@ -320,9 +320,9 @@ read(void)
 		}
 
 		// Пакет принят
-		if ((!check_crc(buffer, byteIndex)) && (buffer[CLUNET_OFFSET_DST_ADDRESS] == CLUNET_DEVICE_ID) &&
-			(RECEIVED_COMMAND == CLUNET_COMMAND_BOOT_CONTROL))
-			return buffer[CLUNET_OFFSET_SIZE];
+		if ((!check_crc(buffer, byteIndex)) && (buffer[CLUNET_OFFSET_DST_ADDRESS] == CLUNET_DEVICE_ID)
+			&& (RECEIVED_COMMAND == CLUNET_COMMAND_BOOT_CONTROL))
+				return buffer[CLUNET_OFFSET_SIZE];
 	
 	}
 
