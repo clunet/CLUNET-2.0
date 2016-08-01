@@ -175,7 +175,7 @@ send(const uint8_t* data, const uint8_t size)
 
 	uint8_t numBits, bitIndex, byteIndex;
 
-	uint8_t crc = check_crc(data, size);
+	const uint8_t crc = check_crc(data, size);
 
 _repeat:
 
