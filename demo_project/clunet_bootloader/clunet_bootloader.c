@@ -264,7 +264,7 @@ read(void)
 	uint8_t bitNum = read_signal(0);
 	
 	// Если биты доминантные и их не менее 4 (стартовый + 3 бита приоритета), то этот пакет нам подходит, начнем прием и разбор
-	if (bitNum >= 4)
+	if (bitNum & 4)
 	{
 	
 		uint8_t bitIndex, bitStuff;
