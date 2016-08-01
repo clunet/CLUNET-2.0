@@ -170,7 +170,7 @@ check_crc(const uint8_t* data, const uint8_t size)
 }
 
 static void
-send(const char* data, const uint8_t size)
+send(const uint8_t* data, const uint8_t size)
 {
 
 	uint8_t numBits, bitIndex, byteIndex;
@@ -330,9 +330,9 @@ read(void)
 
 static void
 #if (FLASHEND > USHRT_MAX)
-write_flash_page(uint32_t address, char* pagebuffer)
+write_flash_page(uint32_t address, uint8_t* pagebuffer)
 #else
-write_flash_page(uint16_t address, char* pagebuffer)
+write_flash_page(uint16_t address, uint8_t* pagebuffer)
 #endif
 {
 
@@ -408,7 +408,7 @@ int main (void)
 						uint16_t address = *((uint16_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));	// Адрес страницы памяти берем начиная с 6-го байта (смещение +5). Размер фиксирован - 32 бит.
 						#endif
 
-						char* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5); // с 10-го байта в пакете (смещение +9) начинаются данные. Размер - MY_SPM_PAGESIZE байт.
+						uint8_t* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5); // с 10-го байта в пакете (смещение +9) начинаются данные. Размер - MY_SPM_PAGESIZE байт.
 
 						write_flash_page(address, pagebuffer); // Пишем во флеш-память
 
