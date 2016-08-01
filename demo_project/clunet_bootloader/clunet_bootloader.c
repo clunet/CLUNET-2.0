@@ -282,7 +282,7 @@ read(void)
 			{
 				lineFree = ~lineFree;
 
-				uint8_t mask = 0xFF >> bitIndex;
+				const uint8_t mask = 0xFF >> bitIndex;
 				
 				if (lineFree)
 					buffer[byteIndex] |= mask;
