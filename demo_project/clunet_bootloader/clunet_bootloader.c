@@ -382,7 +382,7 @@ int main (void)
 		if (read() && (RECEIVED_SUB_COMMAND == COMMAND_FIRMWARE_UPDATE_INIT))
 		{
 
-			char flasher_address = FLASHER_ADDRESS; // Запомним, кто инициировал обновление, с тем и будем дальше работать
+			uint8_t flasher_address = FLASHER_ADDRESS; // Запомним, кто инициировал обновление, с тем и будем дальше работать
 
 			// Теперь работаем только с конкретным устройством
 			update_init_response[CLUNET_OFFSET_DST_ADDRESS] = flasher_address;
