@@ -40,9 +40,9 @@ SOFTWARE.
 
 // Максимальный размер страницы
 #if SPM_PAGESIZE > 128
-	#define MY_SPM_PAGESIZE 128
+ #define MY_SPM_PAGESIZE 128
 #else
-	#define MY_SPM_PAGESIZE SPM_PAGESIZE
+ #define MY_SPM_PAGESIZE SPM_PAGESIZE
 #endif
 
 // Таймаут ожидания приемки пакета в циклах переполнения таймера
