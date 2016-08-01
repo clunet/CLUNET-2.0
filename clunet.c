@@ -343,13 +343,15 @@ ISR(CLUNET_INT_VECTOR)
 		// Главная фаза чтения данных
 		case CLUNET_READING_DATA:
 
+			const uint8_t mask = 0xFF >> bitIndex;
+
 			// Если линия освободилась, значит была единичная посылка - установим соответствующие биты
 			if (lineFree)
-				readBuffer[byteIndex] |= (255 >> bitIndex);
+				readBuffer[byteIndex] |= mask;
 
 			// Если линия прижалась, значит была нулевая посылка - сбросим соответствующие биты
 			else
-				readBuffer[byteIndex] &= ~(255 >> bitIndex);
+				readBuffer[byteIndex] &= ~mask;
 
 			// Обновим битовый индекс с учетом битстаффинга
 			bitIndex += bitNum - bitStuff;
