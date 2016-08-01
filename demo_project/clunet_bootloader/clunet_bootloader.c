@@ -224,12 +224,12 @@ _repeat:
 		}
 		while (delta);
 
-		CLUNET_SEND_INVERT;
-
-		xBitMask ^= 0x80;
+		if (xBitMask ^= 0x80)
+			CLUNET_SEND_0;
+		else
+			CLUNET_SEND_1;
 
 		numBits = (numBits == 5);
-
 	}
 	while (byteIndex <= size);
 
