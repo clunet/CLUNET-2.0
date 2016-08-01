@@ -234,7 +234,7 @@ _repeat:
 	while (byteIndex <= size);
 
 	// Если линию на финише прижали, то через 1Т отпустим ее
-	if (xBitMask)
+	if (!xBitMask)
 	{
 		PAUSE(1);
 		CLUNET_SEND_0;
