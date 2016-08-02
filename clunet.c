@@ -120,35 +120,34 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
 	static uint8_t bitIndex, byteIndex, bitStuff, lastActiveBits; // Статические переменные в ОЗУ (4 байт)
-	uint8_t numBits, prio;
 
+	switch (sendingState)
+	{
+		// Если передатчик освободился, сбросим статус чтения и пока сюда не планируем возвращаться
+		case CLUNET_SENDING_IDLE:
+
+			readingState = CLUNET_READING_IDLE;
+			CLUNET_DISABLE_TIMER_COMP;
+			return;
+
+		// Если мы в ожидании освобождения линии, то начнем передачу через 1Т, предварительно сбросив статус чтения
+		case CLUNET_SENDING_WAIT:
+
+			readingState = CLUNET_READING_IDLE;
+			sendingState = CLUNET_SENDING_INIT;
+			byteIndex = bitIndex = 0;
+			bitStuff = 1;
+			CLUNET_TIMER_REG_OCR += CLUNET_T;
+			return;
+
+	}
+	
 	// Многоцелевая переменная-маска состояния линии и чтения бит данных
 	const uint8_t lineFree = CLUNET_SENDING ? 0x80 : 0x00;
 
-	/* Если передатчик освободился, сбросим статус чтения и пока сюда не планируем возвращаться */
-	if (sendingState == CLUNET_SENDING_IDLE)
-	{
-		readingState = CLUNET_READING_IDLE;
-		goto _disable_oci;
-	}
-
-	/* А если мы в ожидании освобождения линии, то начнем передачу через 1Т, предварительно сбросив статус чтения */
-	else if (sendingState == CLUNET_SENDING_WAIT)
-	{
-		readingState = CLUNET_READING_IDLE;
-		sendingState = CLUNET_SENDING_INIT;
-		byteIndex = bitIndex = 0;
-		bitStuff = 1;
-_delay_1t:
-		CLUNET_TIMER_REG_OCR += CLUNET_T;
-		return;
-	}
-
 	// Если мы должны освободить линию - сделаем это
-	else if (lineFree)
-
+	if (lineFree)
 		CLUNET_SEND_0;
-
 	// Если мы должны прижать линию
 	else
 	{
@@ -156,14 +155,33 @@ _delay_1t:
 		if (readingActiveBits != lastActiveBits && !(sendingState == CLUNET_SENDING_INIT && !bitIndex))
 		{
 			sendingState = CLUNET_SENDING_WAIT;
-			goto _disable_oci;
+			CLUNET_DISABLE_TIMER_COMP;
+			return;
 		}
 		// Конфликта нет, можем смело прижимать линию
 		CLUNET_SEND_1;
 	}
-	
+
+	// Фаза завершения передачи кадра и генерации стопового бита при необходимости
+	if (sendingState == CLUNET_SENDING_STOP)
+	{
+		// Если линию отпустили, то стоповый бит не требуется, во внешнем прерывании запланируются все необходимые действия
+		if (lineFree)
+		{
+			sendingState = CLUNET_SENDING_IDLE;
+			CLUNET_DISABLE_TIMER_COMP;
+		}
+
+		// Иначе если заняли, то сделаем короткий стоповый импульс длительностью 1Т
+		else
+			CLUNET_TIMER_REG_OCR += CLUNET_T;
+
+		return;
+	}
+
 	// Количество бит для передачи
-	numBits = bitStuff;
+	uint8_t numBits = bitStuff;
+	uint8_t prio;
 	
 	// Смотрим фазу передачи
 	switch (sendingState)
@@ -210,24 +228,6 @@ _send_data:
 					goto _send_data; // Уходим в часть кода, занимающейся отправкой данных
 				}
 			}
-
-			break;
-
-		// Фаза завершения передачи кадра и генерации стопового бита при необходимости
-		case CLUNET_SENDING_STOP:
-
-			// Если линию отпустили, то стоповый бит не требуется, во внешнем прерывании запланируются все необходимые действия
-			if (lineFree)
-			{
-				sendingState = CLUNET_SENDING_IDLE;
-_disable_oci:
-				CLUNET_DISABLE_TIMER_COMP;
-				return;
-			}
-
-			// Иначе если заняли, то сделаем короткий стоповый импульс длительностью 1Т
-			else
-				goto _delay_1t;
 
 	}
 
