@@ -144,19 +144,27 @@ _delay_1t:
 		return;
 	}
 
-	// Если мы будем прижимать линию, то проверим совпадение переданных и полученных бит, если различны, то конфликт на линии - останавливаем передачу и ждем
-	else if (!lineFree && readingActiveBits != lastActiveBits && !(sendingState == CLUNET_SENDING_INIT && !bitIndex))
-	{
-		sendingState = CLUNET_SENDING_WAIT;
-		goto _disable_oci;
-	}
+	// Если мы должны освободить линию - сделаем это
+	else if (lineFree)
 
+		CLUNET_SEND_0;
+
+	// Если мы должны прижать линию
+	else
+	{
+		// Если мы будем прижимать линию, то проверим совпадение переданных и полученных бит, если различны, то конфликт на линии - останавливаем передачу и ждем
+		if (readingActiveBits != lastActiveBits && !(sendingState == CLUNET_SENDING_INIT && !bitIndex))
+		{
+			sendingState = CLUNET_SENDING_WAIT;
+			goto _disable_oci;
+		}
+		// Конфликта нет, можем смело прижимать линию
+		CLUNET_SEND_1;
+	}
+	
 	// Количество бит для передачи
 	numBits = bitStuff;
 	
-	// Инверсия выхода
-	CLUNET_SEND_INVERT;
-
 	// Смотрим фазу передачи
 	switch (sendingState)
 	{
