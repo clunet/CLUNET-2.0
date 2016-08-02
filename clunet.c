@@ -94,21 +94,21 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 		{
 			switch (command)
 			{
-			/* Ответ на поиск устройств */
-			case CLUNET_COMMAND_DISCOVERY:
-
-				#ifdef CLUNET_DEVICE_NAME
-				clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, devName, sizeof(devName) - 1);
-				#else
-				clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, 0, 0);
-				#endif
-				return;
-
-			/* Ответ на пинг */
-			case CLUNET_COMMAND_PING:
-
-				clunet_send(src_address, CLUNET_PRIORITY_COMMAND, CLUNET_COMMAND_PING_REPLY, data, size);
-				return;
+				/* Ответ на поиск устройств */
+				case CLUNET_COMMAND_DISCOVERY:
+	
+					#ifdef CLUNET_DEVICE_NAME
+					clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, devName, sizeof(devName) - 1);
+					#else
+					clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, 0, 0);
+					#endif
+					return;
+	
+				/* Ответ на пинг */
+				case CLUNET_COMMAND_PING:
+	
+					clunet_send(src_address, CLUNET_PRIORITY_COMMAND, CLUNET_COMMAND_PING_REPLY, data, size);
+					return;
 			}
 		}
 		if (cbDataReceived)
@@ -181,8 +181,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 
 	// Количество бит для передачи
 	uint8_t numBits = bitStuff;
-	uint8_t prio;
-	
+
 	// Смотрим фазу передачи
 	switch (sendingState)
 	{
@@ -214,10 +213,10 @@ _send_data:
 
 		// Фаза отправки заголовка кадра
 		case CLUNET_SENDING_INIT:
+		{
+			uint8_t priority = (sendingPriority - 1) << 5;
 
-			prio = (sendingPriority - 1) << 5;
-
-			while (((prio << bitIndex) & 0x80) ^ lineFree)
+			while (((priority << bitIndex) & 0x80) ^ lineFree)
 			{
 				numBits++;
 				/* Если отправлены все биты приоритета */
@@ -228,7 +227,7 @@ _send_data:
 					goto _send_data; // Уходим в часть кода, занимающейся отправкой данных
 				}
 			}
-
+		}
 	}
 
 	// Сохраним сколько доминантных бит мы должны передать (на сколько периодов прижать линию)
