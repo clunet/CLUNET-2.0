@@ -99,7 +99,7 @@ _clear:
 }
 
 /*	Функция ожидания начала кадра (доминантного бита) в течении таймаута,
-	заданном в defines.h в параметре BOOTLOADER_TIMEOUT (в милисекундах).
+	заданном в Makefile параметром BOOTLOADER_TIMEOUT (в милисекундах).
 	Возвращает: 0 при успехе, 1 при прошедшем таймауте ожидания (так никто и не начал передачу)
 */
 static uint8_t
@@ -399,35 +399,35 @@ int main (void)
 					switch (subCmd)
 					{
 
-					case COMMAND_FIRMWARE_UPDATE_WRITE:
-					{
-
-						#if (FLASHEND > USHRT_MAX)
-						uint32_t address = *((uint32_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));
-						#else
-						uint16_t address = *((uint16_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));	// Адрес страницы памяти берем начиная с 6-го байта (смещение +5). Размер фиксирован - 32 бит.
-						#endif
-
-						uint8_t* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5); // с 10-го байта в пакете (смещение +9) начинаются данные. Размер - MY_SPM_PAGESIZE байт.
-
-						write_flash_page(address, pagebuffer); // Пишем во флеш-память
-
-						send_firmware_command(COMMAND_FIRMWARE_UPDATE_WRITTEN);	// Отправляем подтверждение записи
-
-					}
-
-					break;
-
-					case COMMAND_FIRMWARE_UPDATE_INIT:
-
-						send(update_init_response, sizeof(update_init_response));
+						case COMMAND_FIRMWARE_UPDATE_WRITE:
+						{
+	
+							#if (FLASHEND > USHRT_MAX)
+							uint32_t address = *((uint32_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));
+							#else
+							uint16_t address = *((uint16_t*)(buffer + (CLUNET_OFFSET_DATA + 1)));	// Адрес страницы памяти берем начиная с 6-го байта (смещение +5). Размер фиксирован - 32 бит.
+							#endif
+	
+							uint8_t* pagebuffer = buffer + (CLUNET_OFFSET_DATA + 5); // с 10-го байта в пакете (смещение +9) начинаются данные. Размер - MY_SPM_PAGESIZE байт.
+	
+							write_flash_page(address, pagebuffer); // Пишем во флеш-память
+	
+							send_firmware_command(COMMAND_FIRMWARE_UPDATE_WRITTEN);	// Отправляем подтверждение записи
+	
+						}
+	
 						break;
-
-
-					case COMMAND_FIRMWARE_UPDATE_DONE:
-
-						goto _done;
-						
+	
+						case COMMAND_FIRMWARE_UPDATE_INIT:
+	
+							send(update_init_response, sizeof(update_init_response));
+							break;
+	
+	
+						case COMMAND_FIRMWARE_UPDATE_DONE:
+	
+							goto _done;
+							
 					}
 				}
 			}			
