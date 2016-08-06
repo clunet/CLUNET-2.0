@@ -110,12 +110,14 @@ wait_for_start(void)
 _clear:
 	CLUNET_TIMER_OVERFLOW_CLEAR;
 	while (!CLUNET_READING)
+	{
 		if (CLUNET_TIMER_OVERFLOW)
 		{
 			if (--overflows)
 				goto _clear;
 			return 1;
 		}
+	}
 	return 0;
 }
 
