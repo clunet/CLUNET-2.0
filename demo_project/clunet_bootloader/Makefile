@@ -18,7 +18,7 @@ BOOTSIZE = 512
 BOOTLOADER_TIMEOUT = 1000UL
 
 # Main frequency
-F_CPU = 16000000UL
+F_CPU = 8000000UL
 
 # Main project path (we need 'clunet_config.h')
 PROJECT_PATH		 = ..
