@@ -1,30 +1,30 @@
 # AVRDUDE config options for 'program' target
-LFUSE          = E4
-HFUSE          = DA
-PROGRAMMER_MCU = m8
-PROGRAMMER_TYPE = usbasp
-PROGRAMMER_PORT = usb
+LFUSE              = E4
+HFUSE              = DA
+PROGRAMMER_MCU     = m8
+PROGRAMMER_TYPE    = usbasp
+PROGRAMMER_PORT    = usb
 
 # MCU
-MCU_TARGET     = atmega8
+MCU_TARGET         = atmega8
 
 # Bootloader starting address (absolute, datasheet * 2)
-BOOTSTART = 0x1C00
+BOOTSTART          = 0x1C00
 
 # Bootloader section size (words)
-BOOTSIZE = 512
+BOOTSIZE           = 512
 
 # Timeout of waiting packet (miliseconds)
 BOOTLOADER_TIMEOUT = 1000UL
 
 # Main frequency
-F_CPU = 8000000UL
+F_CPU              = 8000000UL
 
 # Main project path (we need 'clunet_config.h')
-PROJECT_PATH		 = ..
+PROJECT_PATH       = ..
 
 # CLUNET library path (we need 'clunet.h')
-CLUNET_PATH		 = ../..
+CLUNET_PATH        = ../..
 
 # GCC optimize level
 OPTIMIZE = s
