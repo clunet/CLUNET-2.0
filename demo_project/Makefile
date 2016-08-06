@@ -1,8 +1,13 @@
+# Main program settings
 PRG            = clunet-demo
 OBJ            = clunet-demo.o
+
+# AVRDUDE config options for 'program' target
 LFUSE          = E4
 HFUSE          = D9
-MCU_PROGRAMMER = m8
+PROGRAMMER_MCU = m8
+PROGRAMMER_TYPE = usbasp
+PROGRAMMER_PORT = usb
 
 CLUNET_PATH		 = ..
 CLUNET_FLASHER = D:/Soft/Soft/clunetflasher/clunetflasher.exe
@@ -10,7 +15,11 @@ CLUNET_IP      = 10.13.0.254
 CLUNET_PORT    = 10009
 CLUNET_DEVICE_ID = 99
 
+# Main frequency
 F_CPU = 16000000UL
+
+# GCC optimize level
+OPTIMIZE = s
 
 #MCU_TARGET     = at90s2313
 #MCU_TARGET     = at90s2333
@@ -60,7 +69,6 @@ MCU_TARGET     = atmega8
 #MCU_TARGET     = attiny84
 #MCU_TARGET     = attiny85
 #MCU_TARGET     = attiny861
-OPTIMIZE       = -Os
 
 DEFS           =
 LIBS           = $(CLUNET_PATH)/clunet.c
@@ -71,7 +79,7 @@ CC             = avr-gcc
 
 # Override is only needed by avr-lib build system.
 
-override CFLAGS        = -g -Wall -Wextra $(OPTIMIZE) -mmcu=$(MCU_TARGET) $(DEFS) -I. -I$(CLUNET_PATH) -DF_CPU=$(F_CPU)
+override CFLAGS        = -g -Wall -Wextra -O$(OPTIMIZE) -mmcu=$(MCU_TARGET) $(DEFS) -I. -I$(CLUNET_PATH) -DF_CPU=$(F_CPU)
 override LDFLAGS       = -Wl,-Map,$(PRG).map
 
 OBJCOPY        = avr-objcopy
@@ -154,4 +162,4 @@ pdf: $(PRG).pdf
 
 program: hex
 #	$(CLUNET_FLASHER) $(CLUNET_IP) $(CLUNET_PORT) $(CLUNET_DEVICE_ID) $(PRG).hex
-	avrdude -V -p $(MCU_PROGRAMMER) -c avrisp2 -P usb -U flash:w:$(PRG).hex -U lfuse:w:0x$(LFUSE):m -U hfuse:w:0x$(HFUSE):m
+	avrdude -V -p $(PROGRAMMER_MCU) -c $(PROGRAMMER_TYPE) -P $(PROGRAMMER_PORT) -U flash:w:$(PRG).hex -U lfuse:w:0x$(LFUSE):m -U hfuse:w:0x$(HFUSE):m
