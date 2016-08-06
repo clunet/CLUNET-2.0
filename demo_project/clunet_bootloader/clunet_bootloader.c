@@ -157,7 +157,7 @@ check_crc(const uint8_t* data, const uint8_t size)
             uint8_t inbyte = data[a];
             do
             {
-                  uint8_t mix = crc ^ inbyte;
+                  const uint8_t mix = crc ^ inbyte;
                   crc >>= 1;
                   if (mix & 1)
                   	crc ^= 0x8C;
@@ -380,7 +380,7 @@ int main (void)
 		if (read() && (RECEIVED_SUB_COMMAND == COMMAND_FIRMWARE_UPDATE_INIT))
 		{
 
-			uint8_t flasher_address = FLASHER_ADDRESS; // Запомним, кто инициировал обновление, с тем и будем дальше работать
+			const uint8_t flasher_address = FLASHER_ADDRESS; // Запомним, кто инициировал обновление, с тем и будем дальше работать
 
 			// Теперь работаем только с конкретным устройством
 			update_init_response[CLUNET_OFFSET_DST_ADDRESS] = flasher_address;
@@ -394,7 +394,7 @@ int main (void)
 				// Если системный пакет получен и он от нужного устройства, то обработаем его
 				if (read() && FLASHER_ADDRESS == flasher_address)
 				{
-					uint8_t subCmd = RECEIVED_SUB_COMMAND;
+					const uint8_t subCmd = RECEIVED_SUB_COMMAND;
 
 					switch (subCmd)
 					{
