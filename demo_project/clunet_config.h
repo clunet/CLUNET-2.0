@@ -66,7 +66,7 @@ SOFTWARE.
 // Overflow Condition
 #define CLUNET_TIMER_OVERFLOW (TIFR & (1 << TOV2))
 // Reset Overflow Flag Command
-#define CLUNET_TIMER_OVERFLOW_CLEAR set_bit(TIFR, TOV2)
+#define CLUNET_TIMER_OVERFLOW_CLEAR TIFR = (1 << TOV2)
 
 /* End of Timer/Counter definitions */
 
