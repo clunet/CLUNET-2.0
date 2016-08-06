@@ -1,35 +1,36 @@
-# Main program settings
-PRG            = clunet-demo
-OBJ            = clunet-demo.o
+# Main program name
+PRG              = clunet-demo
 
 # AVRDUDE config options for 'program' target
-LFUSE          = E4
-HFUSE          = D9
-PROGRAMMER_MCU = m8
-PROGRAMMER_TYPE = usbasp
-PROGRAMMER_PORT = usb
+LFUSE            = E4
+HFUSE            = D9
+PROGRAMMER_MCU   = m8
+PROGRAMMER_TYPE  = usbasp
+PROGRAMMER_PORT  = usb
 
-CLUNET_PATH		 = ..
-CLUNET_FLASHER = D:/Soft/Soft/clunetflasher/clunetflasher.exe
-CLUNET_IP      = 10.13.0.254
-CLUNET_PORT    = 10009
+CLUNET_PATH      = ..
+CLUNET_FLASHER   = D:/Soft/Soft/clunetflasher/clunetflasher.exe
+CLUNET_IP        = 10.13.0.254
+CLUNET_PORT      = 10009
 CLUNET_DEVICE_ID = 99
 
 # MCU
-MCU_TARGET     = atmega8
+MCU_TARGET       = atmega8
 
 # Main frequency
-F_CPU = 16000000UL
+F_CPU            = 16000000UL
 
 # GCC optimize level
 OPTIMIZE = s
 
-DEFS           = 
-LIBS           = $(CLUNET_PATH)/clunet.c
+DEFS             = 
+LIBS             = $(CLUNET_PATH)/clunet.c
 
 # You should not have to change anything below here.
 
-CC             = avr-gcc
+OBJ              = $(PRG).o
+
+CC               = avr-gcc
 
 # Override is only needed by avr-lib build system.
 
