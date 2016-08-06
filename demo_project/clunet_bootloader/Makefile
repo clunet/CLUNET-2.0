@@ -1,29 +1,30 @@
+# AVRDUDE config options for 'program' target
 LFUSE          = E4
 HFUSE          = DA
 PROGRAMMER_MCU = m8
 PROGRAMMER_TYPE = usbasp
 PROGRAMMER_PORT = usb
 
-# Стартовый адрес загрузчика
+# Bootloader starting address
 BOOTSTART = 0x1C00
 
-# Размер загрузчика в 16-битных словах (2 байта)
+# Bootloader section size (words)
 BOOTSIZE = 512
 
-# Таймаут одной попытки загрузчика получить пакет (в милисекундах)
+# Timeout of waiting packet (miliseconds)
 BOOTLOADER_TIMEOUT = 1000UL
 
-# Тактовая частота генератора
+# Main frequency
 F_CPU = 16000000UL
 
-# Уровень оптимизации компилятора
-OPTIMIZE = s
-
-# Директория с основным проектом для которого создаем загрузчик (нужен clunet_config.h)
+# Main project path (we need 'clunet_config.h')
 PROJECT_PATH		 = ..
 
-# Директория с библиотекой CLUNET (нужен clunet.h)
+# CLUNET library path (we need 'clunet.h')
 CLUNET_PATH		 = ../..
+
+# GCC optimize level
+OPTIMIZE = s
 
 PRG            = clunet_bootloader
 OBJ            = clunet_bootloader.o
