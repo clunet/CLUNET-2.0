@@ -21,8 +21,6 @@ SOFTWARE.
 #ifndef __CLUNET_CONFIG_H_INCLUDED__
 #define __CLUNET_CONFIG_H_INCLUDED__
 
-#include "bits.h"
-
 /* CONFIGURE YOUR DEVICE HERE */
 
 /* Device address (0-254) */
@@ -50,12 +48,7 @@ SOFTWARE.
 //#define CLUNET_T 8
 
 /* Timer initialization in NORMAL MODE */
-#define CLUNET_TIMER_INIT \
-			{ \
-				unset_bit4(TCCR2, WGM21, WGM20, COM21, COM20); \
-				set_bit(TCCR2, CS22); \
-				unset_bit2(TCCR2, CS21, CS20); \
-			}
+#define CLUNET_TIMER_INIT { TCCR2 = (1 << CS22); }
 
 /* 8-bit Timer/Counter definitions */
 
@@ -71,11 +64,11 @@ SOFTWARE.
 /* End of Timer/Counter definitions */
 
 /* How to enable and disable timer interrupts */
-#define CLUNET_ENABLE_TIMER_COMP { TIFR = (1 << OCF2); set_bit(TIMSK, OCIE2); }
-#define CLUNET_DISABLE_TIMER_COMP unset_bit(TIMSK, OCIE2)
+#define CLUNET_ENABLE_TIMER_COMP { TIFR = (1 << OCF2); TIMSK |= (1 << OCIE2); }
+#define CLUNET_DISABLE_TIMER_COMP { TIMSK &= ~(1 << OCIE2); }
 
 /* How to init and enable external interrupt (read pin) */
-#define CLUNET_INT_INIT { set_bit(MCUCR,ISC00); unset_bit(MCUCR,ISC01); set_bit(GICR, INT0); }
+#define CLUNET_INT_INIT { MCUCR |= (1 << ISC00); MCUCR &= ~(1 << ISC01); GICR |= (1 << INT0); }
 
 /* Interrupt vectors */
 #define CLUNET_TIMER_COMP_VECTOR TIMER2_COMP_vect
