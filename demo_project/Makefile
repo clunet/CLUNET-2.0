@@ -1,13 +1,14 @@
 # Main program name
 PRG              = clunet-demo
 
-# AVRDUDE config options for 'program' target
+# AVRDUDE's settings for 'program' target
 LFUSE            = E4
 HFUSE            = D9
 PROGRAMMER_MCU   = m8
 PROGRAMMER_TYPE  = usbasp
 PROGRAMMER_PORT  = usb
 
+# Settings of CLUNET flash tool for optional 'program' target
 CLUNET_PATH      = ..
 CLUNET_FLASHER   = D:/Soft/Soft/clunetflasher/clunetflasher.exe
 CLUNET_IP        = 10.13.0.254
@@ -18,7 +19,7 @@ CLUNET_DEVICE_ID = 99
 MCU_TARGET       = atmega8
 
 # Main frequency
-F_CPU            = 16000000UL
+F_CPU            = 8000000UL
 
 # GCC optimize level
 OPTIMIZE = s
