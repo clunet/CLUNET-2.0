@@ -60,12 +60,11 @@ SOFTWARE.
 #define CLUNET_TIMER_OVERFLOW (TIFR & (1 << TOV2))
 // Reset Overflow Flag Command
 #define CLUNET_TIMER_OVERFLOW_CLEAR { TIFR = (1 << TOV2); }
-
-/* End of Timer/Counter definitions */
-
-/* How to enable and disable timer interrupts */
+// How to enable and disable timer interrupts
 #define CLUNET_ENABLE_TIMER_COMP { TIFR = (1 << OCF2); TIMSK |= (1 << OCIE2); }
 #define CLUNET_DISABLE_TIMER_COMP { TIMSK &= ~(1 << OCIE2); }
+
+/* End of Timer/Counter definitions */
 
 /* How to init and enable external interrupt (read pin) */
 #define CLUNET_INT_INIT { MCUCR |= (1 << ISC00); MCUCR &= ~(1 << ISC01); GICR |= (1 << INT0); }
