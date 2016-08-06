@@ -1,4 +1,4 @@
-# AVRDUDE config options for 'program' target
+# AVRDUDE's config options for 'program' target
 LFUSE              = E4
 HFUSE              = DA
 PROGRAMMER_MCU     = m8
