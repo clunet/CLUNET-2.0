@@ -185,10 +185,10 @@ _repeat:
 	numBits = 4; // Начинаем с посылки 4 бит (стартовый и 3 бита приоритета)
 	byteIndex = bitIndex = 0;
 	uint8_t sendingByte = data[0];
-	uint8_t xBitMask = 0; // Битовая маска для целей подсчета бит и получения текущего состояния линии
+	uint8_t lineFree = 0; // Битовая маска для целей подсчета бит и получения текущего состояния линии
 	do
 	{
-		while (((sendingByte << bitIndex) & 0x80) ^ xBitMask)
+		while (((sendingByte << bitIndex) & 0x80) ^ lineFree)
 		{
 			numBits++;
 			if (++bitIndex & 8)
@@ -213,18 +213,16 @@ _repeat:
 		{
 			const uint8_t now = CLUNET_TIMER_REG;
 			delta = stop - now;
-			if (xBitMask && CLUNET_READING)
+			if (lineFree && CLUNET_READING && now > max_delta)
 			{
-				if (now <= max_delta)
-					continue;
-				else if (delta > max_delta)
+				if (delta > max_delta)
 					goto _repeat;
 				break;
 			}
 		}
 		while (delta);
 
-		if (xBitMask ^= 0x80)
+		if (lineFree ^= 0x80)
 			CLUNET_SEND_0;
 		else
 			CLUNET_SEND_1;
@@ -234,7 +232,7 @@ _repeat:
 	while (byteIndex <= size);
 
 	// Если линию на финише прижали, то через 1Т отпустим ее
-	if (!xBitMask)
+	if (!lineFree)
 	{
 		PAUSE(1);
 		CLUNET_SEND_0;
@@ -273,7 +271,7 @@ read(void)
 
 		bitIndex = bitStuff = bitNum & 1; // Если приняли 5 бит, то битовый индекс и битстаффинг = 1, иначе 0;
 
-		while(1)
+		while (1)
 		{
 		
 			bitNum = read_signal(lineFree);
