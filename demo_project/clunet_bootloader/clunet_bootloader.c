@@ -362,7 +362,7 @@ send_firmware_command(const uint8_t sub_command)
 }
 
 
-int main (void)
+int main(void)
 {
 	cli();
  	CLUNET_TIMER_INIT;
@@ -387,7 +387,7 @@ int main (void)
 			// Говорим устройству, что мы в режиме прошивки и сообщаем наш размер страницы памяти
 			send(update_init_response, sizeof(update_init_response));
 			
-			while(1)
+			while (1)
 			{
 				// Если системный пакет получен и он от нужного устройства, то обработаем его
 				if (read() && FLASHER_ADDRESS == flasher_address)
