@@ -1,14 +1,14 @@
 # Main program name
 PRG              = clunet-demo
 
-# AVRDUDE's settings for 'program' target
+# AVRDUDE's config options for 'program' target
 LFUSE            = E4
 HFUSE            = D9
 PROGRAMMER_MCU   = m8
 PROGRAMMER_TYPE  = usbasp
 PROGRAMMER_PORT  = usb
 
-# Settings of CLUNET flash tool for optional 'program' target
+# Config options of CLUNET flash tool for optional 'program' target
 CLUNET_PATH      = ..
 CLUNET_FLASHER   = D:/Soft/Soft/clunetflasher/clunetflasher.exe
 CLUNET_IP        = 10.13.0.254
