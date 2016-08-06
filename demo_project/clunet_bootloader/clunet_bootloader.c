@@ -213,7 +213,7 @@ _repeat:
 		{
 			const uint8_t now = CLUNET_TIMER_REG;
 			delta = stop - now;
-			if (lineFree && CLUNET_READING && now > max_delta)
+			if (lineFree && now > max_delta && CLUNET_READING)
 			{
 				if (delta > max_delta)
 					goto _repeat;
