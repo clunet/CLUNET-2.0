@@ -248,7 +248,7 @@ _repeat:
 	
 	Блокирует управление пока линия прижата, при освобождении ожидает межкадровый интервал длительностью 7Т,
 	переходит в состояние чтения пакета, читает, проверяет контрольную сумму, удостоверяется что этот пакет системный и предназначен для нас.
-	Возвращает длину полученных данных в пакете, в случае ошибки - 0.
+	Возвращает длину принятого пакета, в случае ошибки - 0.
 */
 
 static uint8_t
@@ -321,7 +321,7 @@ read(void)
 		// Пакет принят
 		if ((buffer[CLUNET_OFFSET_DST_ADDRESS] == CLUNET_DEVICE_ID) && (RECEIVED_COMMAND == CLUNET_COMMAND_BOOT_CONTROL)
 			&& (!check_crc(buffer, byteIndex)))
-				return buffer[CLUNET_OFFSET_SIZE];
+				return byteIndex;
 	}
 
 	return 0;
