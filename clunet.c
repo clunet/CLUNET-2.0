@@ -127,6 +127,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		case CLUNET_SENDING_IDLE:
 
 			readingState = CLUNET_READING_IDLE;
+_disable:
 			CLUNET_DISABLE_TIMER_COMP;
 			return;
 
@@ -137,6 +138,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 			sendingState = CLUNET_SENDING_INIT;
 			byteIndex = bitIndex = 0;
 			bitStuff = 1;
+_delay_1t:
 			CLUNET_TIMER_REG_OCR += CLUNET_T;
 			return;
 
@@ -155,8 +157,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		if (readingActiveBits != lastActiveBits && !(sendingState == CLUNET_SENDING_INIT && !bitIndex))
 		{
 			sendingState = CLUNET_SENDING_WAIT;
-			CLUNET_DISABLE_TIMER_COMP;
-			return;
+			goto _disable;
 		}
 		// Конфликта нет, можем смело прижимать линию
 		CLUNET_SEND_1;
@@ -169,14 +170,12 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		if (lineFree)
 		{
 			sendingState = CLUNET_SENDING_IDLE;
-			CLUNET_DISABLE_TIMER_COMP;
+			goto _disable;
 		}
 
 		// Иначе если заняли, то сделаем короткий стоповый импульс длительностью 1Т
 		else
-			CLUNET_TIMER_REG_OCR += CLUNET_T;
-
-		return;
+			goto _delay_1t;
 	}
 
 	// Количество бит для передачи
