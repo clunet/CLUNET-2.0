@@ -37,21 +37,19 @@ SOFTWARE.
 #define CLUNET_PORT D
 #define CLUNET_PIN 2
 
-/* Timer prescaler */
-#define CLUNET_TIMER_PRESCALER 64
-
 /*
 	Custom T (T >= 8 && T <= 24).
-	T is frame unit size in timer ticks. Lower - faster, highter - more stable.
+	T is frame unit size in timer ticks. Lower - faster, higher - more stable.
 	If not defined T will be calculated as ~64us based on CLUNET_TIMER_PRESCALER value.
 */
 //#define CLUNET_T 8
 
-/* Timer initialization in NORMAL MODE */
-#define CLUNET_TIMER_INIT { TCCR2 = (1 << CS22); }
-
 /* 8-bit Timer/Counter definitions */
 
+// Timer initialization in NORMAL MODE
+#define CLUNET_TIMER_INIT { TCCR2 = (1 << CS22); }
+// Timer prescaler
+#define CLUNET_TIMER_PRESCALER 64
 // Main Register
 #define CLUNET_TIMER_REG TCNT2
 // Output Compare Register
@@ -60,13 +58,14 @@ SOFTWARE.
 #define CLUNET_TIMER_OVERFLOW (TIFR & (1 << TOV2))
 // Reset Overflow Flag Command
 #define CLUNET_TIMER_OVERFLOW_CLEAR { TIFR = (1 << TOV2); }
-// How to enable and disable timer interrupts
+// Enable timer compare interrupt
 #define CLUNET_ENABLE_TIMER_COMP { TIFR = (1 << OCF2); TIMSK |= (1 << OCIE2); }
+// Disable timer compare interrupt
 #define CLUNET_DISABLE_TIMER_COMP { TIMSK &= ~(1 << OCIE2); }
 
 /* End of Timer/Counter definitions */
 
-/* How to init and enable external interrupt (read pin) */
+/* How to enable external interrupt on any logical change */
 #define CLUNET_INT_INIT { MCUCR |= (1 << ISC00); MCUCR &= ~(1 << ISC01); GICR |= (1 << INT0); }
 
 /* Interrupt vectors */
