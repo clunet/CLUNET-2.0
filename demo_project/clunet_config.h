@@ -48,24 +48,24 @@ SOFTWARE.
 
 // Timer initialization in NORMAL MODE
 #define CLUNET_TIMER_INIT { TCCR2 = (1 << CS22); }
-// Timer prescaler
+// Timer prescaler (for autocalculate T period)
 #define CLUNET_TIMER_PRESCALER 64
 // Main Register
 #define CLUNET_TIMER_REG TCNT2
 // Output Compare Register
 #define CLUNET_TIMER_REG_OCR OCR2
-// Overflow Condition
+// Overflow Condition (used in bootloader only)
 #define CLUNET_TIMER_OVERFLOW (TIFR & (1 << TOV2))
-// Reset Overflow Flag Command
+// Reset Overflow Flag Command (used in bootloader only)
 #define CLUNET_TIMER_OVERFLOW_CLEAR { TIFR = (1 << TOV2); }
-// Enable timer compare interrupt
+// Enable timer compare interrupt (reset output compare flag & enable interrupt)
 #define CLUNET_ENABLE_TIMER_COMP { TIFR = (1 << OCF2); TIMSK |= (1 << OCIE2); }
 // Disable timer compare interrupt
 #define CLUNET_DISABLE_TIMER_COMP { TIMSK &= ~(1 << OCIE2); }
 
 /* End of Timer/Counter definitions */
 
-/* How to enable external interrupt on any logical change */
+// How to enable external interrupt on any logical change
 #define CLUNET_INT_INIT { MCUCR |= (1 << ISC00); MCUCR &= ~(1 << ISC01); GICR |= (1 << INT0); }
 
 /* Interrupt vectors */
