@@ -29,7 +29,7 @@ SOFTWARE.
 /* Device name */
 #define CLUNET_DEVICE_NAME "CLUNET device"
 
-/* Buffer sized (memory usage) */
+/* Buffers sizes (memory usage) */
 #define CLUNET_SEND_BUFFER_SIZE 128
 #define CLUNET_READ_BUFFER_SIZE 128
 
