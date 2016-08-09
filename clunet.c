@@ -36,7 +36,7 @@ static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, 
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
 /* Глобальные статические переменные (ОЗУ: 5 байт) */
-static uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
+static volatile uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
 static uint8_t sendingLength; // Длина данных для отправки вместе с заголовком кадра
 static uint8_t sendingPriority; // Приоритет отправляемого пакета (от 1 до 8)
 static uint8_t readingState = CLUNET_READING_IDLE; // Состояние чтения
@@ -49,30 +49,6 @@ static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Буфер чтения
 #ifdef CLUNET_DEVICE_NAME
  static const char devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
 #endif
-
-/* Функция нахождения контрольной суммы Maxim iButton 8-bit */
-static char
-check_crc(const char* data, const uint8_t size)
-{
-	uint8_t crc = 0;
-	uint8_t a = 0;
-	do
-	{
-		uint8_t b = 8;
-		uint8_t inbyte = data[a];
-		do
-		{
-			uint8_t mix = crc ^ inbyte;
-			crc >>= 1;
-			if (mix & 1)
-				crc ^= 0x8C;
-			inbyte >>= 1;
-		}
-		while (--b);
-	}
-	while (++a < size);
-	return crc;
-}
 
 /* Встраиваемая функция обработки входящего пакета */
 static inline void
@@ -136,7 +112,7 @@ _disable:
 
 			readingState = CLUNET_READING_IDLE;
 			sendingState = CLUNET_SENDING_INIT;
-			byteIndex = bitIndex = 0;
+			sendBuffer[sendingLength] = byteIndex = bitIndex = 0;
 			bitStuff = 1;
 _delay_1t:
 			CLUNET_TIMER_REG_OCR += CLUNET_T;
@@ -190,22 +166,44 @@ _send_data:
 			// Если мы прижали линию, то ищем единичные биты, иначе - нулевые
 			while (((sendBuffer[byteIndex] << bitIndex) & 0x80) ^ lineFree)
 			{
+
 				numBits++;
+
+				// Update Maxim iButton 8-bit CRC with every new sending byte
+
+				if (!bitIndex && byteIndex < sendingLength)
+				{
+					uint8_t b = 8;
+					uint8_t inbyte = sendBuffer[byteIndex];
+					do
+					{
+						uint8_t mix = sendBuffer[sendingLength] ^ inbyte;
+						sendBuffer[sendingLength] >>= 1;
+						if (mix & 1)
+							sendBuffer[sendingLength] ^= 0x8C;
+						inbyte >>= 1;
+					}
+					while (--b);
+				}
+
 				/* Если передан байт данных */
 				if (++bitIndex & 8)
 				{
 					/* Если передача всех данных закончена, то перейдем к завершающей стадии */
-					if (++byteIndex == sendingLength)
+					if (byteIndex == sendingLength)
 					{
 						sendingState = CLUNET_SENDING_STOP;
 						break;
 					}
 					// Если данные не закончились, то начинаем передачу следующего байта с бита 0
+					byteIndex++;
 					bitIndex = 0;
 				}
+
 				/* Если набрали для передачи 5 бит, то выходим из цикла */
 				if (numBits == 5)
 					break;
+
 			}
 			
 			break;
@@ -245,7 +243,7 @@ _send_data:
 ISR(CLUNET_INT_VECTOR)
 {
 
-	static uint8_t bitIndex, byteIndex, bitStuff, tickSync; // Статические переменные (ОЗУ: 4 байта)
+	static uint8_t bitIndex, byteIndex, bitStuff, tickSync, crc; // Статические переменные (ОЗУ: 5 байт)
 
 	// Текущее значение таймера
 	const uint8_t now = CLUNET_TIMER_REG;
@@ -335,7 +333,7 @@ ISR(CLUNET_INT_VECTOR)
 		if (!readingState)
 		{
 			readingState = CLUNET_READING_START;
-			byteIndex = bitIndex = 0;
+			byteIndex = bitIndex = crc = 0;
 			return;
 		}
 
@@ -360,12 +358,28 @@ ISR(CLUNET_INT_VECTOR)
 			if (bitIndex & 8)
 			{
 			
+				/* Update Maxim iButton 8-bit CRC with received byte */
+
+				uint8_t b = 8;
+				uint8_t inbyte = readBuffer[byteIndex];
+
+				do
+				{
+					uint8_t mix = crc ^ inbyte;
+					crc >>= 1;
+					if (mix & 1)
+						crc ^= 0x8C;
+					inbyte >>= 1;
+				}
+				while (--b);
+
 				// Если пакет прочитан полностью, то проверим контрольную сумму
 				if ((++byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
 				{
 					readingState = CLUNET_READING_IDLE;
-					// Проверяем CRC, при успехе начнем обработку принятого пакета
-					if (!check_crc(readBuffer, byteIndex))
+					// If CRC is correct - process incoming packet
+					if (!crc)
+					{
 						clunet_data_received (
 							readBuffer[CLUNET_OFFSET_SRC_ADDRESS],
 							readBuffer[CLUNET_OFFSET_DST_ADDRESS],
@@ -373,7 +387,7 @@ ISR(CLUNET_INT_VECTOR)
 							readBuffer + CLUNET_OFFSET_DATA,
 							readBuffer[CLUNET_OFFSET_SIZE]
 						);
-
+					}
 				}
 
 				// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
@@ -446,7 +460,7 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 		sendBuffer[CLUNET_OFFSET_SIZE] = size;
 		
 		/* Есть данные для отправки? Тогда скопируем их в буфер */
-		if (data && size)
+		if (size && data)
 		{
 			uint8_t idx = 0;
 			do
@@ -454,10 +468,7 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 			while (++idx < size);
 		}
 
-		/* Добавляем контрольную сумму */
-		sendBuffer[CLUNET_OFFSET_DATA + size] = check_crc(sendBuffer, CLUNET_OFFSET_DATA + size);
-		
-		sendingLength = size + (CLUNET_OFFSET_DATA + 1);
+		sendingLength = size + CLUNET_OFFSET_DATA;
 
 		sendingState = CLUNET_SENDING_WAIT;	// Фаза ожидания линии
 
