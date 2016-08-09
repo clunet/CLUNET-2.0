@@ -65,8 +65,10 @@ SOFTWARE.
 
 /* End of Timer/Counter definitions */
 
-// How to enable external interrupt on any logical change
+/* How to init, enable & disable external interrupt (any logical change) */
 #define CLUNET_INT_INIT { MCUCR |= (1 << ISC00); MCUCR &= ~(1 << ISC01); GICR |= (1 << INT0); }
+#define CLUNET_INT_ENABLE { GIFR = (1 << INTF0); GICR |= (1 << INT0); }
+#define CLUNET_INT_DISABLE { GICR &= ~(1 << INT0); }
 
 /* Interrupt vectors */
 #define CLUNET_TIMER_COMP_VECTOR TIMER2_COMP_vect
