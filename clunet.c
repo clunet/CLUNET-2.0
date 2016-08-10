@@ -182,6 +182,7 @@ _delay_1t:
 		goto _disable;
 	}
 
+	/* COLLECTING DATA BITS */
 	do
 	{
 		const uint8_t bitValue = sendingByte & (0x80 >> bitIndex);
@@ -189,10 +190,10 @@ _delay_1t:
 		{
 			numBits++;
 
-			// If sending byte complete: reset bit index and get next byte to send.
+			// If sending byte complete: reset bit index and get next byte to send
 			if (++bitIndex & 8)
 			{
-				// If data complete: exit and send this last bits.
+				// If data complete: exit and send this last bits
 				if (byteIndex == sendingLength)
 					break;
 				sendingByte = sendBuffer[byteIndex++];
@@ -204,12 +205,14 @@ _delay_1t:
 	}
 	while (numBits != 5);
 	
-	// Сохраним сколько доминантных бит мы должны передать (на сколько периодов прижать линию)
+	// Save number of dominant bits that we must send
 	if (!lineFree)
 		lastActiveBits = numBits;
 
+	// Update OCR
 	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
 
+	// Bitstuff correction
 	numBits = (numBits == 5);
 }
 /* End of ISR(CLUNET_TIMER_COMP_VECTOR) */
