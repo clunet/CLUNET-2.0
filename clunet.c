@@ -36,7 +36,7 @@ static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, 
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
 /* Глобальные статические переменные (ОЗУ: 5 байт) */
-static volatile uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
+static uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
 static uint8_t sendingLength; // Длина данных для отправки вместе с заголовком кадра
 static uint8_t sendingPriority; // Приоритет отправляемого пакета (от 1 до 8)
 static uint8_t readingState = CLUNET_READING_IDLE; // Состояние чтения
