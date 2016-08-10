@@ -35,23 +35,24 @@ SOFTWARE.
 static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
-/* Глобальные статические переменные (ОЗУ: 5 байт) */
-static uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
-static uint8_t sendingLength; // Длина данных для отправки вместе с заголовком кадра
-static uint8_t sendingPriority; // Приоритет отправляемого пакета (от 1 до 8)
-static uint8_t readingState = CLUNET_READING_IDLE; // Состояние чтения
-static uint8_t readingActiveBits; // Количество активных прочитанных бит
-static uint8_t readingSyncTime; // Reading Sync Time
-static uint8_t sendingByteIndex; // Sending Byte Index
+/* Global static variables (RAM: 5 bytes) */
+/* Sending process variables */
+static uint8_t sendingState = CLUNET_SENDING_IDLE; // Current sending state
 static uint8_t sendingBitIndex; // Sending Bit Index
+static uint8_t sendingByteIndex; // Sending Byte Index
+static uint8_t sendingLength; // Sending Data Length
+static uint8_t sendingPriority; // Sending priority (1 to 8)
+/* Reading process variables */
+static uint8_t readingState = CLUNET_READING_IDLE; // Current reading state
+//static uint8_t readingActiveBits; // Количество активных прочитанных бит
+static uint8_t readingSyncTime; // Reading Sync Time
 
-
-/* Буферы данных */
-static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Буфер передачи
-static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Буфер чтения
+/* Data buffers */
+static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Sending data buffer
+static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Reading data buffer
 
 #ifdef CLUNET_DEVICE_NAME
- static const char devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
+ static const char devName[] = CLUNET_DEVICE_NAME; // Simple and short device name
 #endif
 
 #define SEND_IS_ACTIVE (sendingState & 1)
@@ -161,6 +162,7 @@ _delay_1t:
 	{
 		CLUNET_INT_ENABLE; // Enable external interrupt for collision resolving or maybe sending complete (waiting for new packet)
 		CLUNET_SEND_0;
+		readingSyncTime = CLUNET_TIMER_REG;
 	}
 
 	// Если мы должны прижать линию
@@ -177,8 +179,6 @@ _delay_1t:
 		CLUNET_INT_DISABLE;
 		CLUNET_SEND_1;
 	}
-
-	readingSyncTime = CLUNET_TIMER_REG;
 
 	// If sending data complete: send 1T stop-bit or finish sending process.
 	if (sendingBitIndex & 8)
