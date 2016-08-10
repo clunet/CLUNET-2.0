@@ -18,17 +18,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *****************************************************************************************/
 
-#ifndef __CLUNET_H_INCLUDED__
-#define __CLUNET_H_INCLUDED__
+#ifndef __CLUNET_H__
+#define __CLUNET_H__
 
 #include <stdint.h>
 #include "clunet_config.h"
 
 #define CLUNET_SENDING_IDLE 0
-#define CLUNET_SENDING_INIT 1
-#define CLUNET_SENDING_DATA 2
-#define CLUNET_SENDING_STOP 3
-#define CLUNET_SENDING_WAIT 4
+#define CLUNET_SENDING_ACTIVE 1
+#define CLUNET_SENDING_WAIT 2
 
 #define CLUNET_READING_IDLE 0
 #define CLUNET_READING_START 1
