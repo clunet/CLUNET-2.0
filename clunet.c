@@ -252,24 +252,13 @@ ISR(CLUNET_INT_VECTOR)
 		// Conflict!
 		if ((lineFree && numBits) || (!lineFree && CLUNET_TIMER_REG_OCR - now >= (CLUNET_T / 2)))
 		{
-			; // TODO
+			CLUNET_DISABLE_TIMER_COMP;
+			sendingState = CLUNET_SENDING_WAIT;
 		}
-
-	}
-	else
-	{
-		if (lineFree)
-		{
-			readingSyncTime += bitNum * CLUNET_T;
-		}
-		else
-		{
-			readingSyncTime = now;
-		}
+		
+		return;
 	}
 
-
-	// Если линию освободило
 	if (lineFree)
 	{
 		// Корректируем время по прочитанным битам
@@ -279,46 +268,14 @@ ISR(CLUNET_INT_VECTOR)
 		// Необходимо на случай передачи нами рецессивных бит в моменты передачи кем-то доминантных.
 		// В этих случаях мы сюда не попадаем, а следовательно данные переданные и прочтенные будут различаться.
 		readingActiveBits = bitNum;
-		
-		// Если состояние передачи неактивно либо в ожидании, то запланируем сброс чтения и, при необходимости, начало передачи через 7Т
-		if (!(sendingState & 3))
-		{
-			CLUNET_TIMER_REG_OCR = now + (7 * CLUNET_T - 1);
-			CLUNET_ENABLE_TIMER_COMP;
-		}
+			
+		CLUNET_TIMER_REG_OCR = readingSyncTime + (7 * CLUNET_T - 1);
+		CLUNET_ENABLE_TIMER_COMP;
 	}
-	
-	// Если линию прижало к нулю (все устройства синхронизируются по спаду в независимости от состояний чтения и передачи)
 	else
 	{
 		readingSyncTime = now; // Pulldown sync time
-
-		/* СИНХРОНИЗАЦИЯ ПЕРЕДАЧИ И АРБИТРАЖ */
-		// Проверка на конфликт передачи. Если мы в активной фазе передачи, и не жмем линию
-		if (sendingState & 3)
-		{
-			if (!CLUNET_SENDING)
-			{
-				// Разница должна быть в идеале -1, так как прерывание сравнения вызывается на OCR+1, но так как нам ясно, что прерывания не было,
-				// то при 0, а тем более -1 мы в него попадем после выхода отсюда, поэтому эту разницу мы должны проигнорировать
-				// Да, и разница < 0, естественно, из области фантастики.
-				int8_t delta = CLUNET_TIMER_REG_OCR - now;
-		
-				const int8_t max_delta = (int8_t)((float)CLUNET_T * 0.3f);
-		
-				// Если разница во времени когда мы должны прижать линию более 0.3Т, то конфликт однозначен - отдаем линию другому устройству (арбитраж проигран), но чтение продолжаем :)
-				if (delta >= max_delta)
-				{
-					CLUNET_DISABLE_TIMER_COMP;
-					sendingState = CLUNET_SENDING_WAIT;
-				}
-				// Если разница во времени менее 0.3Т, то это рассинхронизация, синхронизируем регистр сравнения и быстро попадаем в прерывание сравнения для продолжения передачи
-				else if (delta > 0)
-					CLUNET_TIMER_REG_OCR = now;
-			}
-		}
-		else
-			CLUNET_DISABLE_TIMER_COMP;
+		CLUNET_DISABLE_TIMER_COMP;
 
 		// Если в ожидании приема пакета, то переходим к фазе начала приемки кадра, обнуляем счетчики и выходим
 		if (!readingState)
