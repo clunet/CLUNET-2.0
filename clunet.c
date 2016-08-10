@@ -42,6 +42,8 @@ static uint8_t sendingPriority; // Приоритет отправляемого
 static uint8_t readingState = CLUNET_READING_IDLE; // Состояние чтения
 static uint8_t readingActiveBits; // Количество активных прочитанных бит
 static uint8_t readingSyncTime; // Reading Sync Time
+static uint8_t sendingByteIndex; // Sending Byte Index
+static uint8_t sendingBitIndex; // Sending Bit Index
 
 
 /* Буферы данных */
@@ -121,11 +123,11 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 	}
 }
 
-/* Timer output compare interrupt service routine (RAM: 5 bytes) */
+/* Timer output compare interrupt service routine (RAM: 3 bytes) */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
-	// Static RAM variables (5 bytes)
-	static uint8_t bitIndex, byteIndex, sendingByte, numBits, lastActiveBits;
+	// Static RAM variables (3 bytes)
+	static uint8_t sendingByte, numBits, lastActiveBits;
 
 	// If in NOT_ACTIVE state
 	if (!SEND_IS_ACTIVE)
@@ -144,8 +146,8 @@ _disable:
 		// If in WAIT state: starting sending throuth 1Т
 		sendingState = CLUNET_SENDING_ACTIVE;
 		sendingByte = sendingPriority - 1; // First need send priority 3 bits
-		byteIndex = 0; // Data index
-		bitIndex = 5; // Start of priority bits
+		sendingByteIndex = 0; // Data index
+		sendingBitIndex = 5; // Start of priority bits
 		numBits = 1; // Start bit
 _delay_1t:
 		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
@@ -165,7 +167,7 @@ _delay_1t:
 	else
 	{
 		// Если мы будем прижимать линию, то проверим совпадение переданных и полученных бит, если различны, то конфликт на линии - останавливаем передачу и ждем
-		if (readingActiveBits != lastActiveBits && !(sendingState == CLUNET_SENDING_INIT && !bitIndex))
+		if (readingActiveBits != lastActiveBits && !(sendingState == CLUNET_SENDING_INIT && !sendingBitIndex))
 		{
 			sendingState = CLUNET_SENDING_WAIT;
 			goto _disable;
@@ -179,7 +181,7 @@ _delay_1t:
 	readingSyncTime = CLUNET_TIMER_REG;
 
 	// If sending data complete: send 1T stop-bit or finish sending process.
-	if (bitIndex & 8)
+	if (sendingBitIndex & 8)
 	{
 		// If we pull down the line - send 1T stop-bit.
 		if (!lineFree)
@@ -192,19 +194,19 @@ _delay_1t:
 	/* COLLECTING DATA BITS */
 	do
 	{
-		const uint8_t bitValue = sendingByte & (0x80 >> bitIndex);
+		const uint8_t bitValue = sendingByte & (0x80 >> sendingBitIndex);
 		if ((lineFree && !bitValue) || (!lineFree && bitValue))
 		{
 			numBits++;
 
 			// If sending byte complete: reset bit index and get next byte to send
-			if (++bitIndex & 8)
+			if (++sendingBitIndex & 8)
 			{
 				// If data complete: exit and send this last bits
-				if (byteIndex == sendingLength)
+				if (sendingByteIndex == sendingLength)
 					break;
-				sendingByte = sendBuffer[byteIndex++];
-				bitIndex = 0;
+				sendingByte = sendBuffer[sendingByteIndex++];
+				sendingBitIndex = 0;
 			}
 		}
 		else
