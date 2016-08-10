@@ -194,8 +194,8 @@ _delay_1t:
 			{
 				if (byteIndex == sendingLength)
 					break;
-				bitIndex = 0;
 				sendingByte = sendBuffer[byteIndex++];
+				bitIndex = 0;
 			}
 		}
 		else
