@@ -186,14 +186,14 @@ _delay_1t:
 
 	if (sendingState == CLUNET_SENDING_INIT)
 	{
-		if (CLUNET_SENDING)
-		{
-			while (sendingByte & (0x80 >> bitIndex))
+			if (sendingByte & (0x80 >> bitIndex))
 			{
-				// TODO
+				if (CLUNET_SENDING)
+				{
+					// TODO
+				}
 			}
-		}
-		
+
 	}
 
 
