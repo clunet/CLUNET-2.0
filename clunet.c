@@ -123,7 +123,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	static uint8_t bitIndex, byteIndex, sendingByte, numBits, lastActiveBits;
 
 	// If sending in not active state
-	if (!(sendingState & 1))
+	if (!(sendingState & 3))
 	{
 		// Reset reading state
 		readingState = CLUNET_READING_IDLE;
@@ -133,7 +133,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 _disable:		CLUNET_DISABLE_TIMER_COMP;
 
 		// If in WAITING state: starting sending throuth 1Т
-		else
+		else if (sendingState & 4)
 		{
 			sendingState = CLUNET_SENDING_ACTIVE;
 			sendingByte = sendingPriority - 1; // First need send priority 3 bits
@@ -170,8 +170,8 @@ _delay_1t:
 		CLUNET_SEND_1;
 	}
 
-	// If sending data complete. Send 1T stop-bit or finish sending process.
-	if (byteIndex >= sendingLength)
+	// If sending data complete: send 1T stop-bit or finish sending process.
+	if (byteIndex == sendingLength && bitIndex & 8)
 	{
 		// If we pull down the line - send 1T stop-bit.
 		if (!lineFree)
@@ -191,7 +191,7 @@ _delay_1t:
 			// If sending byte complete: reset bit index and get next byte to send.
 			if (++bitIndex & 8)
 			{
-				if (byteIndex >= sendingLength)
+				if (byteIndex == sendingLength)
 					break;
 				bitIndex = 0;
 				sendingByte = sendBuffer[byteIndex++];
