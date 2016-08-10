@@ -166,16 +166,14 @@ _delay_1t:
 	// Фаза завершения передачи кадра и генерации стопового бита при необходимости
 	if (sendingState == CLUNET_SENDING_STOP)
 	{
-		// Если линию отпустили, то стоповый бит не требуется, во внешнем прерывании запланируются все необходимые действия
-		if (lineFree)
-		{
-			sendingState = CLUNET_SENDING_IDLE;
-			goto _disable;
-		}
-
-		// Иначе если заняли, то сделаем короткий стоповый импульс длительностью 1Т
-		else
+		// Если линию заняли, то сделаем короткий стоповый импульс длительностью 1Т
+		if (!lineFree)
 			goto _delay_1t;
+
+		// Если линию отпустили, то стоповый бит не требуется, во внешнем прерывании запланируются все необходимые действия
+		sendingState = CLUNET_SENDING_IDLE;
+		goto _disable;
+
 	}
 
 	// Количество бит для передачи
@@ -196,36 +194,13 @@ _send_data:
 				/* Если передан байт данных */
 				if (++bitIndex & 8)
 				{
-
-					// Update Maxim iButton 8-bit CRC with every new sending byte
-
-/*					if (byteIndex < sendingLength)
-					{
-
-						uint8_t b = 8;
-						uint8_t inbyte = sendBuffer[byteIndex];
-						if (!byteIndex)
-							sendBuffer[sendingLength] = 0;
-						do
-						{
-							uint8_t mix = sendBuffer[sendingLength] ^ inbyte;
-							sendBuffer[sendingLength] >>= 1;
-							if (mix & 1)
-								sendBuffer[sendingLength] ^= 0x8C;
-							inbyte >>= 1;
-						}
-						while (--b);
-					}
-
 					/* Если передача всех данных закончена, то перейдем к завершающей стадии */
 					if (++byteIndex == sendingLength)
-//					else
 					{
 						sendingState = CLUNET_SENDING_STOP;
 						break;
 					}
 					// Если данные не закончились, то начинаем передачу следующего байта с бита 0
-//					byteIndex++;
 					bitIndex = 0;
 				}
 
@@ -272,7 +247,7 @@ _send_data:
 ISR(CLUNET_INT_VECTOR)
 {
 
-	static uint8_t bitIndex, byteIndex, bitStuff, tickSync, crc; // Статические переменные (ОЗУ: 5 байт)
+	static uint8_t bitIndex, byteIndex, bitStuff, tickSync; // Статические переменные (ОЗУ: 4 байта)
 
 	// Текущее значение таймера
 	const uint8_t now = CLUNET_TIMER_REG;
@@ -319,7 +294,7 @@ ISR(CLUNET_INT_VECTOR)
 		// Если состояние передачи неактивно либо в ожидании, то запланируем сброс чтения и, при необходимости, начало передачи через 7Т
 		if (!(sendingState & 3))
 		{
-			CLUNET_TIMER_REG_OCR = now + (7 * CLUNET_T - 1);
+			CLUNET_TIMER_REG_OCR = tickSync + (7 * CLUNET_T - 1);
 			CLUNET_ENABLE_TIMER_COMP;
 		}
 	}
@@ -362,7 +337,7 @@ ISR(CLUNET_INT_VECTOR)
 		if (!readingState)
 		{
 			readingState = CLUNET_READING_START;
-			byteIndex = bitIndex = crc = 0;
+			byteIndex = bitIndex = 0;
 			return;
 		}
 
@@ -386,28 +361,12 @@ ISR(CLUNET_INT_VECTOR)
 
 			if (bitIndex & 8)
 			{
-			
-				/* Update Maxim iButton 8-bit CRC with received byte */
-
-				uint8_t b = 8;
-				uint8_t inbyte = readBuffer[byteIndex];
-
-				do
-				{
-					uint8_t mix = crc ^ inbyte;
-					crc >>= 1;
-					if (mix & 1)
-						crc ^= 0x8C;
-					inbyte >>= 1;
-				}
-				while (--b);
-
 				// Если пакет прочитан полностью, то проверим контрольную сумму
 				if ((++byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
 				{
 					readingState = CLUNET_READING_IDLE;
 					// If CRC is correct - process incoming packet
-					if (!crc)
+					if (!check_crc(readBuffer, byteIndex))
 					{
 						clunet_data_received (
 							readBuffer[CLUNET_OFFSET_SRC_ADDRESS],
