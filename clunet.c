@@ -237,7 +237,7 @@ ISR(CLUNET_INT_VECTOR)
 	/* Reading number of bits */
 	uint8_t bitNum = 0; // Number of bits
 	uint8_t ticks = now - readingSyncTime;
-	if (ticks < (CLUNET_T * 5 + CLUNET_T / 2))
+	if ((ticks >= (CLUNET_T / 2)) && (ticks < (CLUNET_T * 5 + CLUNET_T / 2)))
 	{
 		uint8_t period = CLUNET_T / 2;
 		for ( ; ticks >= period; period += CLUNET_T, bitNum++);
@@ -246,7 +246,11 @@ ISR(CLUNET_INT_VECTOR)
 	/* SENDING MODE */
 	if (sendingState & 1)
 	{
-		readingSyncTime = CLUNET_TIMER_REG;
+		// Conflict!
+		if ((lineFree && numBits) || (!lineFree && CLUNET_TIMER_REG_OCR - now >= (CLUNET_T / 2)))
+		{
+			; // TODO
+		}
 
 	}
 	else
