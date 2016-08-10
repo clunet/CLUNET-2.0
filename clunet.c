@@ -41,6 +41,8 @@ static uint8_t sendingLength; // Длина данных для отправки
 static uint8_t sendingPriority; // Приоритет отправляемого пакета (от 1 до 8)
 static uint8_t readingState = CLUNET_READING_IDLE; // Состояние чтения
 static uint8_t readingActiveBits; // Количество активных прочитанных бит
+static uint8_t readingSyncTime; // Reading Sync Time
+
 
 /* Буферы данных */
 static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Буфер передачи
@@ -205,9 +207,12 @@ _delay_1t:
 	}
 	while (numBits != 5);
 	
-	// Save number of dominant bits that we must send
+	// Save pull down time and number of dominant bits that we must send
 	if (!lineFree)
+	{
+		readingSyncTime = CLUNET_TIMER_REG;
 		lastActiveBits = numBits;
+	}
 
 	// Update OCR
 	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
@@ -259,7 +264,7 @@ ISR(CLUNET_INT_VECTOR)
 	if (lineFree)
 	{
 		// Корректируем время по прочитанным битам
-		tickSync += bitNum * CLUNET_T;
+		readingSyncTime += bitNum * CLUNET_T;
 
 		// Сохраним количество прочитанных доминантных бит для проверки в процедуре передачи.
 		// Необходимо на случай передачи нами рецессивных бит в моменты передачи кем-то доминантных.
@@ -277,9 +282,7 @@ ISR(CLUNET_INT_VECTOR)
 	// Если линию прижало к нулю (все устройства синхронизируются по спаду в независимости от состояний чтения и передачи)
 	else
 	{
-
-		/* СИНХРОНИЗАЦИЯ ЧТЕНИЯ */
-		tickSync = now;		// Синхронизация времени чтения
+		readingSyncTime = now; // Pulldown sync time
 
 		/* СИНХРОНИЗАЦИЯ ПЕРЕДАЧИ И АРБИТРАЖ */
 		// Проверка на конфликт передачи. Если мы в активной фазе передачи, и не жмем линию
