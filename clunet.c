@@ -121,35 +121,41 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 {
 	static uint8_t bitIndex, byteIndex, bitStuff, lastActiveBits; // Статические переменные в ОЗУ (4 байт)
 
-	switch (sendingState)
+	// If sending in not active state
+	if (!(sendingState & 3))
 	{
-		// Если передатчик освободился, сбросим статус чтения и пока сюда не планируем возвращаться
-		case CLUNET_SENDING_IDLE:
+		// Reset reading state
+		readingState = CLUNET_READING_IDLE;
 
-			readingState = CLUNET_READING_IDLE;
+		// Если передатчик освободился, сбросим статус чтения и пока сюда не планируем возвращаться
+		if (!sendingState)
+		{
 _disable:
 			CLUNET_DISABLE_TIMER_COMP;
-			return;
+		}
 
 		// Если мы в ожидании освобождения линии, то начнем передачу через 1Т, предварительно сбросив статус чтения
-		case CLUNET_SENDING_WAIT:
-
-			readingState = CLUNET_READING_IDLE;
+		else
+		{
 			sendingState = CLUNET_SENDING_INIT;
 			byteIndex = bitIndex = 0;
 			bitStuff = 1;
 _delay_1t:
 			CLUNET_TIMER_REG_OCR += CLUNET_T;
-			return;
-
+		}
+		return;
 	}
-	
+
 	// Многоцелевая переменная-маска состояния линии и чтения бит данных
 	const uint8_t lineFree = CLUNET_SENDING ? 0x80 : 0x00;
 
-	// Если мы должны освободить линию - сделаем это
+	// If we need to free line, just do it
 	if (lineFree)
+	{
+		CLUNET_INT_ENABLE; // Enable external interrupt for collision detect
 		CLUNET_SEND_0;
+	}
+
 	// Если мы должны прижать линию
 	else
 	{
@@ -159,23 +165,22 @@ _delay_1t:
 			sendingState = CLUNET_SENDING_WAIT;
 			goto _disable;
 		}
-		// Конфликта нет, можем смело прижимать линию
+
+		// If no conflict - disable external interrupt and pull down line
+		CLUNET_INT_DISABLE;
 		CLUNET_SEND_1;
 	}
 
-	// Фаза завершения передачи кадра и генерации стопового бита при необходимости
+	// If sending state is STOP
 	if (sendingState == CLUNET_SENDING_STOP)
 	{
-		// Если линию отпустили, то стоповый бит не требуется, во внешнем прерывании запланируются все необходимые действия
-		if (lineFree)
-		{
-			sendingState = CLUNET_SENDING_IDLE;
-			goto _disable;
-		}
-
-		// Иначе если заняли, то сделаем короткий стоповый импульс длительностью 1Т
-		else
+		// If we pull down the line - do short stop dominant pulse
+		if (!lineFree)
 			goto _delay_1t;
+
+		// If we pullup the line, we don't need stop bit, just reset sending state and stop transmit
+		sendingState = CLUNET_SENDING_IDLE;
+		goto _disable;
 	}
 
 	// Количество бит для передачи
@@ -184,7 +189,7 @@ _delay_1t:
 	// Смотрим фазу передачи
 	switch (sendingState)
 	{
-		// Главная фаза передачи данных
+		// Main data transmit state
 		case CLUNET_SENDING_DATA:
 _send_data:
 			// Если мы прижали линию, то ищем единичные биты, иначе - нулевые
