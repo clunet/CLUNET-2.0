@@ -123,22 +123,19 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	static uint8_t bitIndex, byteIndex, sendingByte, numBits, lastActiveBits;
 
 	// If sending in not active state
-	if (!(sendingState & 3))
+	if (!(sendingState & 1))
 	{
 		// Reset reading state
 		readingState = CLUNET_READING_IDLE;
 
-		// Если передатчик освободился, сбросим статус чтения и пока сюда не планируем возвращаться
+		// If in IDLE state: disable timer output compare interrupt
 		if (!sendingState)
-		{
-_disable:
-			CLUNET_DISABLE_TIMER_COMP;
-		}
+_disable:		CLUNET_DISABLE_TIMER_COMP;
 
-		// Если мы в ожидании освобождения линии, то начнем передачу через 1Т, предварительно сбросив статус чтения
+		// If in WAITING state: starting sending throuth 1Т
 		else
 		{
-			sendingState = CLUNET_SENDING_INIT; // TODO
+			sendingState = CLUNET_SENDING_ACTIVE;
 			sendingByte = sendingPriority - 1; // First need send priority 3 bits
 			byteIndex = 0; // Data index
 			bitIndex = 5; // Start of priority bits
