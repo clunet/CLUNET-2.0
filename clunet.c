@@ -122,7 +122,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	// Static RAM variables (5 bytes)
 	static uint8_t bitIndex, byteIndex, sendingByte, numBits, lastActiveBits;
 
-	// If sending in not active state
+	// If in NOT_ACTIVE state
 	if (!(sendingState & 1))
 	{
 		// Reset reading state
@@ -136,7 +136,7 @@ _disable:
 			return;
 		}
 
-		// If in WAITING state: starting sending throuth 1Т
+		// If in WAIT state: starting sending throuth 1Т
 		sendingState = CLUNET_SENDING_ACTIVE;
 		sendingByte = sendingPriority - 1; // First need send priority 3 bits
 		byteIndex = 0; // Data index
@@ -172,7 +172,7 @@ _delay_1t:
 	}
 
 	// If sending data complete: send 1T stop-bit or finish sending process.
-	if (byteIndex == sendingLength && bitIndex & 8)
+	if (bitIndex & 8)
 	{
 		// If we pull down the line - send 1T stop-bit.
 		if (!lineFree)
