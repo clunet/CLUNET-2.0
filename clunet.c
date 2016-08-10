@@ -52,6 +52,8 @@ static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Буфер чтения
  static const char devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
 #endif
 
+#define SEND_ACTIVE (sendingState & 1)
+
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
 static char
 check_crc(const char* data, const uint8_t size)
@@ -125,7 +127,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	static uint8_t bitIndex, byteIndex, sendingByte, numBits, lastActiveBits;
 
 	// If in NOT_ACTIVE state
-	if (!(sendingState & 1))
+	if (!SEND_ACTIVE)
 	{
 		// Reset reading state
 		readingState = CLUNET_READING_IDLE;
@@ -244,7 +246,7 @@ ISR(CLUNET_INT_VECTOR)
 	}
 
 	/* SENDING MODE */
-	if (sendingState & 1)
+	if (SEND_ACTIVE)
 	{
 		// Conflict!
 		if ((lineFree && numBits) || (!lineFree && CLUNET_TIMER_REG_OCR - now >= (CLUNET_T / 2)))
