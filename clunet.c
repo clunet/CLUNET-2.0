@@ -46,6 +46,8 @@ static uint8_t sendingPriority; // Sending priority (1 to 8)
 static uint8_t readingState = CLUNET_READING_IDLE; // Current reading state
 //static uint8_t readingActiveBits; // Количество активных прочитанных бит
 static uint8_t readingSyncTime; // Reading Sync Time
+static uint8_t readingPriority; // Receiving packet priority
+
 
 /* Data buffers */
 static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Sending data buffer
@@ -295,9 +297,10 @@ ISR(CLUNET_INT_VECTOR)
 		// Если в ожидании приема пакета, то переходим к фазе начала приемки кадра, обнуляем счетчики и выходим
 		if (!readingState)
 		{
-			readingState = CLUNET_READING_START;
-			readingByte = byteIndex = crc = 0;
+			readingState = CLUNET_READING_ACTIVE;
+			readingByte = readingPriority = byteIndex = crc = 0;
 			bitIndex = 5;
+			bitStuff = 1;
 			return;
 		}
 
@@ -316,50 +319,56 @@ ISR(CLUNET_INT_VECTOR)
 
 	if (bitIndex & 8)
 	{
-			
-		/* Update Maxim iButton 8-bit CRC with received byte */
-
-		uint8_t b = 8;
-		uint8_t inbyte = readBuffer[byteIndex];
-
-		do
-		{
-			uint8_t mix = crc ^ inbyte;
-			crc >>= 1;
-			if (mix & 1)
-				crc ^= 0x8C;
-			inbyte >>= 1;
-		}
-		while (--b);
-
-		// Если пакет прочитан полностью, то проверим контрольную сумму
-		if ((++byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
-		{
-			readingState = CLUNET_READING_IDLE;
-			// If CRC is correct - process incoming packet
-			if (!crc)
-			{
-				clunet_data_received (
-					readBuffer[CLUNET_OFFSET_SRC_ADDRESS],
-					readBuffer[CLUNET_OFFSET_DST_ADDRESS],
-					readBuffer[CLUNET_OFFSET_COMMAND],
-					readBuffer + CLUNET_OFFSET_DATA,
-					readBuffer[CLUNET_OFFSET_SIZE]
-				);
-			}
-		}
-
-		// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
-		else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
-		{
-			bitIndex &= 7;
-			readBuffer[byteIndex] = lineFree;
-		}
-
-		// Иначе ошибка: нехватка приемного буфера -> игнорируем пакет
+		// Readed priority
+		if (!readingPriority)
+			readingPriority = readingByte + 1;
 		else
-			readingState = CLUNET_READING_ERROR;
+		{
+			readBuffer[byteIndex] = readingByte;
 
+			/* Update Maxim iButton 8-bit CRC with received byte */
+	
+			uint8_t b = 8;
+			uint8_t inbyte = readingByte;
+	
+			do
+			{
+				uint8_t mix = crc ^ inbyte;
+				crc >>= 1;
+				if (mix & 1)
+					crc ^= 0x8C;
+				inbyte >>= 1;
+			}
+			while (--b);
+			
+			// Если пакет прочитан полностью, то проверим контрольную сумму
+			if ((++byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
+			{
+				readingState = CLUNET_READING_IDLE;
+				// If CRC is correct - process incoming packet
+				if (!crc)
+				{
+					clunet_data_received (
+						readBuffer[CLUNET_OFFSET_SRC_ADDRESS],
+						readBuffer[CLUNET_OFFSET_DST_ADDRESS],
+						readBuffer[CLUNET_OFFSET_COMMAND],
+						readBuffer + CLUNET_OFFSET_DATA,
+						readBuffer[CLUNET_OFFSET_SIZE]
+					);
+				}
+			}
+	
+			// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
+			else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
+			{
+				bitIndex &= 7;
+				readBuffer[byteIndex] = lineFree;
+			}
+	
+			// Иначе ошибка: нехватка приемного буфера -> игнорируем пакет
+			else
+				readingState = CLUNET_READING_IDLE;
+		}
 	}
 
 	/* Проверка на битстаффинг, учитываем в следующем цикле */
