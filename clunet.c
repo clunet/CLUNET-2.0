@@ -147,8 +147,10 @@ _delay_1t:
 		return;
 	}
 
+	const uint8_t lineFree = CLUNET_SENDING;
+
 	// If we need to free line - do it
-	if (CLUNET_SENDING)
+	if (lineFree)
 	{
 		CLUNET_INT_ENABLE; // Enable external interrupt for collision resolving
 		CLUNET_SEND_0;
@@ -173,7 +175,7 @@ _delay_1t:
 	if (sendingState == CLUNET_SENDING_STOP)
 	{
 		// If we pull down the line - do short stop dominant pulse
-		if (CLUNET_SENDING)
+		if (!lineFree)
 			goto _delay_1t;
 
 		// If we pullup the line, we don't need stop bit - reset sending state and stop transmit
@@ -184,12 +186,75 @@ _delay_1t:
 	// Количество бит для передачи
 	uint8_t numBits = bitStuff;
 
-	if (sendingState == CLUNET_SENDING_INIT)
+	while (1)
 	{
-			if (sendingByte & (0x80 >> bitIndex))
+		uint8_t bitValue = sendingByte & (0x80 >> bitIndex);
+		if ((lineFree && !bitValue) || (!lineFree && bitValue))
+		{
+			numBits++;
+
+			/* Если передан байт данных */
+			if (++bitIndex & 8)
 			{
-				if (CLUNET_SENDING)
+				/* Если передача всех данных закончена, то перейдем к завершающей стадии */
+				if (byteIndex == sendingLength)
 				{
+					sendingState = CLUNET_SENDING_STOP;
+					break;
+				}
+
+				// Если данные не закончились, то начинаем передачу следующего байта с бита 0
+				sendingByte = sendBuffer[byteIndex++];
+				bitIndex = 0;
+			}
+
+			if (numBits == 5)
+				break;
+		}
+
+
+
+
+
+		if (CLUNET_SENDING)
+		{
+			numBits++;
+
+			/* Если передан байт данных */
+			if (++bitIndex & 8)
+			{
+
+				// Update Maxim iButton 8-bit CRC with every new sending byte
+
+/*					if (byteIndex < sendingLength)
+					{
+
+						uint8_t b = 8;
+						uint8_t inbyte = sendBuffer[byteIndex];
+						if (!byteIndex)
+							sendBuffer[sendingLength] = 0;
+						do
+						{
+							uint8_t mix = sendBuffer[sendingLength] ^ inbyte;
+							sendBuffer[sendingLength] >>= 1;
+							if (mix & 1)
+								sendBuffer[sendingLength] ^= 0x8C;
+							inbyte >>= 1;
+						}
+						while (--b);
+					}
+
+					/* Если передача всех данных закончена, то перейдем к завершающей стадии */
+					if (++byteIndex == sendingLength)
+//					else
+					{
+						sendingState = CLUNET_SENDING_STOP;
+						break;
+					}
+					// Если данные не закончились, то начинаем передачу следующего байта с бита 0
+//					byteIndex++;
+					bitIndex = 0;
+				}
 					// TODO
 				}
 			}
@@ -199,8 +264,6 @@ _delay_1t:
 
 
 
-	if (!bitIndex)
-		sendingByte = sendBuffer[byteIndex];
 
 
 
