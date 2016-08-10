@@ -119,7 +119,7 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 /* Процедура прерывания сравнения таймера (ОЗУ: 4 байта) */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
-	static uint8_t bitIndex, byteIndex, bitStuff, lastActiveBits; // Статические переменные в ОЗУ (4 байт)
+	static uint8_t bitIndex, byteIndex, sendingByte, bitStuff, lastActiveBits; // Статические переменные в ОЗУ (4 байт)
 
 	// If sending in not active state
 	if (!(sendingState & 3))
@@ -138,6 +138,7 @@ _disable:
 		else
 		{
 			sendingState = CLUNET_SENDING_INIT;
+			sendingByte = (sendingPriority - 1) << 5;
 			byteIndex = bitIndex = 0;
 			bitStuff = 1;
 _delay_1t:
@@ -146,13 +147,10 @@ _delay_1t:
 		return;
 	}
 
-	// Многоцелевая переменная-маска состояния линии и чтения бит данных
-	const uint8_t lineFree = CLUNET_SENDING ? 0x80 : 0x00;
-
-	// If we need to free line, just do it
-	if (lineFree)
+	// If we need to free line - do it
+	if (CLUNET_SENDING)
 	{
-		CLUNET_INT_ENABLE; // Enable external interrupt for collision detect
+		CLUNET_INT_ENABLE; // Enable external interrupt for collision resolving
 		CLUNET_SEND_0;
 	}
 
@@ -175,16 +173,37 @@ _delay_1t:
 	if (sendingState == CLUNET_SENDING_STOP)
 	{
 		// If we pull down the line - do short stop dominant pulse
-		if (!lineFree)
+		if (CLUNET_SENDING)
 			goto _delay_1t;
 
-		// If we pullup the line, we don't need stop bit, just reset sending state and stop transmit
+		// If we pullup the line, we don't need stop bit - reset sending state and stop transmit
 		sendingState = CLUNET_SENDING_IDLE;
 		goto _disable;
 	}
 
 	// Количество бит для передачи
 	uint8_t numBits = bitStuff;
+
+	if (sendingState == CLUNET_SENDING_INIT)
+	{
+		if (CLUNET_SENDING)
+		{
+			while (sendingByte & (0x80 >> bitIndex))
+			{
+				// TODO
+			}
+		}
+		
+	}
+
+
+
+
+	if (!bitIndex)
+		sendingByte = sendBuffer[byteIndex];
+
+
+
 
 	// Смотрим фазу передачи
 	switch (sendingState)
