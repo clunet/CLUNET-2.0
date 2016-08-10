@@ -130,19 +130,20 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 
 		// If in IDLE state: disable timer output compare interrupt
 		if (!sendingState)
-_disable:		CLUNET_DISABLE_TIMER_COMP;
+		{
+_disable:
+			CLUNET_DISABLE_TIMER_COMP;
+			return;
+		}
 
 		// If in WAITING state: starting sending throuth 1Т
-		else
-		{
-			sendingState = CLUNET_SENDING_ACTIVE;
-			sendingByte = sendingPriority - 1; // First need send priority 3 bits
-			byteIndex = 0; // Data index
-			bitIndex = 5; // Start of priority bits
-			numBits = 1; // Start bit
+		sendingState = CLUNET_SENDING_ACTIVE;
+		sendingByte = sendingPriority - 1; // First need send priority 3 bits
+		byteIndex = 0; // Data index
+		bitIndex = 5; // Start of priority bits
+		numBits = 1; // Start bit
 _delay_1t:
-			CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
-		}
+		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
 		return;
 	}
 
