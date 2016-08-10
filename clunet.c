@@ -192,6 +192,7 @@ _delay_1t:
 			// If sending byte complete: reset bit index and get next byte to send.
 			if (++bitIndex & 8)
 			{
+				// If data complete: exit and send this last bits.
 				if (byteIndex == sendingLength)
 					break;
 				sendingByte = sendBuffer[byteIndex++];
@@ -211,16 +212,16 @@ _delay_1t:
 
 	numBits = (numBits == 5);
 }
-/* Конец ISR(CLUNET_TIMER_COMP_VECTOR) */
+/* End of ISR(CLUNET_TIMER_COMP_VECTOR) */
 
 
-/* Процедура внешнего прерывания по фронту и спаду сигнала (ОЗУ: 4 байта) */
+/* External interrupt service routine (RAM: 4 bytes) */
 ISR(CLUNET_INT_VECTOR)
 {
+	// Static variables (RAM: 5 bytes)
+	static uint8_t bitIndex, byteIndex, bitStuff, tickSync, crc;
 
-	static uint8_t bitIndex, byteIndex, bitStuff, tickSync, crc; // Статические переменные (ОЗУ: 5 байт)
-
-	// Текущее значение таймера
+	// Current timer value
 	const uint8_t now = CLUNET_TIMER_REG;
 
 	// Многоцелевая переменная состояния линии и заполнения байт соответствующими значениями
@@ -397,7 +398,7 @@ ISR(CLUNET_INT_VECTOR)
 	/* Проверка на битстаффинг, учитываем в следующем цикле */
 	bitStuff = (bitNum == 5);
 }
-/* Конец ISR(CLUNET_INT_VECTOR) */
+/* End of ISR(CLUNET_INT_VECTOR) */
 
 void
 clunet_init()
