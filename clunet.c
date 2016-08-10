@@ -36,7 +36,7 @@ static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, 
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
 /* Глобальные статические переменные (ОЗУ: 5 байт) */
-static volatile uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
+static uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
 static uint8_t sendingLength; // Длина данных для отправки вместе с заголовком кадра
 static uint8_t sendingPriority; // Приоритет отправляемого пакета (от 1 до 8)
 static uint8_t readingState = CLUNET_READING_IDLE; // Состояние чтения
@@ -116,10 +116,10 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 	}
 }
 
-/* Процедура прерывания сравнения таймера (ОЗУ: 4 байта) */
+/* Timer output compare interrupt service routine (RAM: 5 bytes) */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
-	// Статические переменные в ОЗУ (5 байт)
+	// Static RAM variables (5 bytes)
 	static uint8_t bitIndex, byteIndex, sendingByte, numBits, lastActiveBits;
 
 	// If sending in not active state
