@@ -183,14 +183,16 @@ _delay_1t:
 
 	do
 	{
-		uint8_t bitValue = sendingByte & (0x80 >> bitIndex);
+		const uint8_t bitValue = sendingByte & (0x80 >> bitIndex);
 		if ((lineFree && !bitValue) || (!lineFree && bitValue))
 		{
 			numBits++;
 
-			/* Если передан байт данных */
+			// If sending byte complete: reset bit index and get next byte to send.
 			if (++bitIndex & 8)
 			{
+				if (byteIndex >= sendingLength)
+					break;
 				bitIndex = 0;
 				sendingByte = sendBuffer[byteIndex++];
 			}
@@ -199,7 +201,7 @@ _delay_1t:
 			break;
 	}
 	while (numBits != 5);
-
+	
 	// Сохраним сколько доминантных бит мы должны передать (на сколько периодов прижать линию)
 	if (!lineFree)
 		lastActiveBits = numBits;
