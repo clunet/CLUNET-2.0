@@ -249,13 +249,32 @@ ISR(CLUNET_INT_VECTOR)
 	/* SENDING MODE */
 	if (SEND_IS_ACTIVE)
 	{
-		// Conflict!
-		if ((lineFree && numBits) || (!lineFree && CLUNET_TIMER_REG_OCR - now >= (CLUNET_T / 2)))
+		// On rising edge:
+		if (lineFree)
 		{
-			CLUNET_DISABLE_TIMER_COMP;
-			sendingState = CLUNET_SENDING_WAIT;
+			if (bitNum)
+			{
+				// Conflict
+			}
+			
+			// Сохраним количество прочитанных доминантных бит для проверки в процедуре передачи.
+			// Необходимо на случай передачи нами рецессивных бит в моменты передачи кем-то доминантных.
+			// В этих случаях мы сюда не попадаем, а следовательно данные переданные и прочтенные будут различаться.
+			readingActiveBits = bitNum;
 		}
-		
+
+		// On falling edge (arbitration detected)
+		else
+		{
+			const uint8_t delta = CLUNET_TIMER_REG_OCR - now;
+			if (delta >= (CLUNET_T / 2))
+			{
+				CLUNET_DISABLE_TIMER_COMP;
+				sendingState = CLUNET_SENDING_WAIT;
+			}
+			else if (delta)
+				CLUNET_TIMER_REG_OCR = now;
+		}
 		return;
 	}
 
@@ -264,11 +283,6 @@ ISR(CLUNET_INT_VECTOR)
 		// Корректируем время по прочитанным битам
 		readingSyncTime += bitNum * CLUNET_T;
 
-		// Сохраним количество прочитанных доминантных бит для проверки в процедуре передачи.
-		// Необходимо на случай передачи нами рецессивных бит в моменты передачи кем-то доминантных.
-		// В этих случаях мы сюда не попадаем, а следовательно данные переданные и прочтенные будут различаться.
-		readingActiveBits = bitNum;
-			
 		CLUNET_TIMER_REG_OCR = readingSyncTime + (7 * CLUNET_T - 1);
 		CLUNET_ENABLE_TIMER_COMP;
 	}
