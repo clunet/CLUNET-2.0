@@ -186,7 +186,7 @@ _delay_1t:
 	// Количество бит для передачи
 	uint8_t numBits = bitStuff;
 
-	while (1)
+	do
 	{
 		uint8_t bitValue = sendingByte & (0x80 >> bitIndex);
 		if ((lineFree && !bitValue) || (!lineFree && bitValue))
@@ -208,140 +208,11 @@ _delay_1t:
 				bitIndex = 0;
 			}
 
-			if (numBits == 5)
-				break;
 		}
-
-
-
-
-
-		if (CLUNET_SENDING)
-		{
-			numBits++;
-
-			/* Если передан байт данных */
-			if (++bitIndex & 8)
-			{
-
-				// Update Maxim iButton 8-bit CRC with every new sending byte
-
-/*					if (byteIndex < sendingLength)
-					{
-
-						uint8_t b = 8;
-						uint8_t inbyte = sendBuffer[byteIndex];
-						if (!byteIndex)
-							sendBuffer[sendingLength] = 0;
-						do
-						{
-							uint8_t mix = sendBuffer[sendingLength] ^ inbyte;
-							sendBuffer[sendingLength] >>= 1;
-							if (mix & 1)
-								sendBuffer[sendingLength] ^= 0x8C;
-							inbyte >>= 1;
-						}
-						while (--b);
-					}
-
-					/* Если передача всех данных закончена, то перейдем к завершающей стадии */
-					if (++byteIndex == sendingLength)
-//					else
-					{
-						sendingState = CLUNET_SENDING_STOP;
-						break;
-					}
-					// Если данные не закончились, то начинаем передачу следующего байта с бита 0
-//					byteIndex++;
-					bitIndex = 0;
-				}
-					// TODO
-				}
-			}
-
-	}
-
-
-
-
-
-
-
-
-	// Смотрим фазу передачи
-	switch (sendingState)
-	{
-		// Main data transmit state
-		case CLUNET_SENDING_DATA:
-_send_data:
-			// Если мы прижали линию, то ищем единичные биты, иначе - нулевые
-			while (((sendBuffer[byteIndex] << bitIndex) & 0x80) ^ lineFree)
-			{
-
-				numBits++;
-
-				/* Если передан байт данных */
-				if (++bitIndex & 8)
-				{
-
-					// Update Maxim iButton 8-bit CRC with every new sending byte
-
-/*					if (byteIndex < sendingLength)
-					{
-
-						uint8_t b = 8;
-						uint8_t inbyte = sendBuffer[byteIndex];
-						if (!byteIndex)
-							sendBuffer[sendingLength] = 0;
-						do
-						{
-							uint8_t mix = sendBuffer[sendingLength] ^ inbyte;
-							sendBuffer[sendingLength] >>= 1;
-							if (mix & 1)
-								sendBuffer[sendingLength] ^= 0x8C;
-							inbyte >>= 1;
-						}
-						while (--b);
-					}
-
-					/* Если передача всех данных закончена, то перейдем к завершающей стадии */
-					if (++byteIndex == sendingLength)
-//					else
-					{
-						sendingState = CLUNET_SENDING_STOP;
-						break;
-					}
-					// Если данные не закончились, то начинаем передачу следующего байта с бита 0
-//					byteIndex++;
-					bitIndex = 0;
-				}
-
-				/* Если набрали для передачи 5 бит, то выходим из цикла */
-				if (numBits == 5)
-					break;
-
-			}
-			
+		else
 			break;
-
-		// Фаза отправки заголовка кадра
-		case CLUNET_SENDING_INIT:
-		{
-			uint8_t priority = (sendingPriority - 1) << 5;
-
-			while (((priority << bitIndex) & 0x80) ^ lineFree)
-			{
-				numBits++;
-				/* Если отправлены все биты приоритета */
-				if (++bitIndex == 3)
-				{
-					bitIndex = 0;
-					sendingState = CLUNET_SENDING_DATA;
-					goto _send_data; // Уходим в часть кода, занимающейся отправкой данных
-				}
-			}
-		}
 	}
+	while (numBits != 5);
 
 	// Сохраним сколько доминантных бит мы должны передать (на сколько периодов прижать линию)
 	if (!lineFree)
@@ -350,7 +221,6 @@ _send_data:
 	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
 
 	bitStuff = (numBits == 5);
-
 }
 /* Конец ISR(CLUNET_TIMER_COMP_VECTOR) */
 
