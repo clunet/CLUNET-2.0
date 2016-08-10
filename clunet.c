@@ -119,7 +119,8 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 /* Процедура прерывания сравнения таймера (ОЗУ: 4 байта) */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
-	static uint8_t bitIndex, byteIndex, sendingByte, bitStuff, lastActiveBits; // Статические переменные в ОЗУ (4 байт)
+	// Статические переменные в ОЗУ (5 байт)
+	static uint8_t bitIndex, byteIndex, sendingByte, numBits, lastActiveBits;
 
 	// If sending in not active state
 	if (!(sendingState & 3))
@@ -137,12 +138,13 @@ _disable:
 		// Если мы в ожидании освобождения линии, то начнем передачу через 1Т, предварительно сбросив статус чтения
 		else
 		{
-			sendingState = CLUNET_SENDING_INIT;
-			sendingByte = (sendingPriority - 1) << 5;
-			byteIndex = bitIndex = 0;
-			bitStuff = 1;
+			sendingState = CLUNET_SENDING_INIT; // TODO
+			sendingByte = sendingPriority - 1; // First need send priority 3 bits
+			byteIndex = 0; // Data index
+			bitIndex = 5; // Start of priority bits
+			numBits = 1; // Start bit
 _delay_1t:
-			CLUNET_TIMER_REG_OCR += CLUNET_T;
+			CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
 		}
 		return;
 	}
@@ -152,7 +154,7 @@ _delay_1t:
 	// If we need to free line - do it
 	if (lineFree)
 	{
-		CLUNET_INT_ENABLE; // Enable external interrupt for collision resolving
+		CLUNET_INT_ENABLE; // Enable external interrupt for collision resolving or maybe sending complete (waiting for new packet)
 		CLUNET_SEND_0;
 	}
 
@@ -171,20 +173,16 @@ _delay_1t:
 		CLUNET_SEND_1;
 	}
 
-	// If sending state is STOP
-	if (sendingState == CLUNET_SENDING_STOP)
+	// If sending data complete. Send 1T stop-bit or finish sending process.
+	if (byteIndex >= sendingLength)
 	{
-		// If we pull down the line - do short stop dominant pulse
+		// If we pull down the line - send 1T stop-bit.
 		if (!lineFree)
 			goto _delay_1t;
 
-		// If we pullup the line, we don't need stop bit - reset sending state and stop transmit
 		sendingState = CLUNET_SENDING_IDLE;
 		goto _disable;
 	}
-
-	// Количество бит для передачи
-	uint8_t numBits = bitStuff;
 
 	do
 	{
@@ -196,18 +194,9 @@ _delay_1t:
 			/* Если передан байт данных */
 			if (++bitIndex & 8)
 			{
-				/* Если передача всех данных закончена, то перейдем к завершающей стадии */
-				if (byteIndex == sendingLength)
-				{
-					sendingState = CLUNET_SENDING_STOP;
-					break;
-				}
-
-				// Если данные не закончились, то начинаем передачу следующего байта с бита 0
-				sendingByte = sendBuffer[byteIndex++];
 				bitIndex = 0;
+				sendingByte = sendBuffer[byteIndex++];
 			}
-
 		}
 		else
 			break;
@@ -220,7 +209,7 @@ _delay_1t:
 
 	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
 
-	bitStuff = (numBits == 5);
+	numBits = (numBits == 5);
 }
 /* Конец ISR(CLUNET_TIMER_COMP_VECTOR) */
 
