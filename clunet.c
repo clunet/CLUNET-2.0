@@ -173,6 +173,8 @@ _delay_1t:
 		CLUNET_SEND_1;
 	}
 
+	readingSyncTime = CLUNET_TIMER_REG;
+
 	// If sending data complete: send 1T stop-bit or finish sending process.
 	if (bitIndex & 8)
 	{
@@ -209,10 +211,7 @@ _delay_1t:
 	
 	// Save pull down time and number of dominant bits that we must send
 	if (!lineFree)
-	{
-		readingSyncTime = CLUNET_TIMER_REG;
 		lastActiveBits = numBits;
-	}
 
 	// Update OCR
 	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
@@ -227,13 +226,7 @@ _delay_1t:
 ISR(CLUNET_INT_VECTOR)
 {
 	// Static variables (RAM: 5 bytes)
-	static uint8_t bitIndex, byteIndex, bitStuff, tickSync, crc;
-
-	/* SENDING MODE */
-	if (sendingState & 1)
-	{
-		// TODO
-	}
+	static uint8_t bitIndex, byteIndex, bitStuff, crc;
 
 	// Current timer value
 	const uint8_t now = CLUNET_TIMER_REG;
@@ -241,30 +234,33 @@ ISR(CLUNET_INT_VECTOR)
 	// Многоцелевая переменная состояния линии и заполнения байт соответствующими значениями
 	const uint8_t lineFree = CLUNET_READING ? 0x00 : 0xFF;
 
-	// Количество прочитанных бит
-	uint8_t bitNum = 0;
-
-	if (readingState)
+	/* Reading number of bits */
+	uint8_t bitNum = 0; // Number of bits
+	uint8_t ticks = now - readingSyncTime;
+	if (ticks < (CLUNET_T * 5 + CLUNET_T / 2))
 	{
+		uint8_t period = CLUNET_T / 2;
+		for ( ; ticks >= period; period += CLUNET_T, bitNum++);
+	}
 
-		uint8_t ticks, period;
-
-		// Цикл подсчета количества бит с момента последней синхронизации по спаду
-		for (ticks = now - tickSync, period = (CLUNET_T / 2); ticks >= period; period += CLUNET_T)
-		{
-			// Ошибка: нет битстаффинга
-			if (++bitNum > 5)
-			{
-				readingState = CLUNET_READING_ERROR;
-				break;
-			}
-		}
-
-		// Ошибка: не может быть нулем
-		if (!bitNum)
-			readingState = CLUNET_READING_ERROR;
+	/* SENDING MODE */
+	if (sendingState & 1)
+	{
+		readingSyncTime = CLUNET_TIMER_REG;
 
 	}
+	else
+	{
+		if (lineFree)
+		{
+			readingSyncTime += bitNum * CLUNET_T;
+		}
+		else
+		{
+			readingSyncTime = now;
+		}
+	}
+
 
 	// Если линию освободило
 	if (lineFree)
