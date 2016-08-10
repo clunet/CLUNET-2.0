@@ -229,6 +229,12 @@ ISR(CLUNET_INT_VECTOR)
 	// Static variables (RAM: 5 bytes)
 	static uint8_t bitIndex, byteIndex, bitStuff, tickSync, crc;
 
+	/* SENDING MODE */
+	if (sendingState & 1)
+	{
+		// TODO
+	}
+
 	// Current timer value
 	const uint8_t now = CLUNET_TIMER_REG;
 
