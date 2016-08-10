@@ -249,32 +249,31 @@ ISR(CLUNET_INT_VECTOR)
 	/* SENDING MODE */
 	if (SEND_IS_ACTIVE)
 	{
-		// On rising edge:
+		// Interrupt on rising edge (should always run, if bitNum > 0 mean arbitration, save it and switch to reading)
 		if (lineFree)
 		{
+			// Conflict: switch to READ mode & stop send process.
 			if (bitNum)
 			{
-				// Conflict
+				// Conflict! Switch to READ mode! Use bitNum variable!
 			}
 			
-			// Сохраним количество прочитанных доминантных бит для проверки в процедуре передачи.
-			// Необходимо на случай передачи нами рецессивных бит в моменты передачи кем-то доминантных.
-			// В этих случаях мы сюда не попадаем, а следовательно данные переданные и прочтенные будут различаться.
-			readingActiveBits = bitNum;
 		}
 
-		// On falling edge (arbitration detected)
+		// Interrupt on falling edge (alway mean EARLY ARBITRATION, need save bitNum and switch to READ mode).
+		// We in this code only if someone device pull down the line before us.
 		else
 		{
 			const uint8_t delta = CLUNET_TIMER_REG_OCR - now;
+			// Conflict: switch to READ mode & stop send process.
 			if (delta >= (CLUNET_T / 2))
 			{
-				CLUNET_DISABLE_TIMER_COMP;
-				sendingState = CLUNET_SENDING_WAIT;
+				// Conflict! Switch to READ mode! Use bitNum variable!
 			}
-			else if (delta)
-				CLUNET_TIMER_REG_OCR = now;
 		}
+
+		CLUNET_DISABLE_TIMER_COMP;
+		sendingState = CLUNET_SENDING_WAIT;
 		return;
 	}
 
