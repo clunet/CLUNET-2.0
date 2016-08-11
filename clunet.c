@@ -242,15 +242,7 @@ read_switch(void)
 {
 	CLUNET_DISABLE_TIMER_COMP;
 	sendingState = CLUNET_SENDING_WAIT;
-
-	bitIndex -= dominantTask - (recessiveTask == 5);
-
-	if (bitIndex & 0x80)
-	{
-		byteIndex--;
-		bitIndex += 8;
-	}
-
+	readingState = CLUNET_READING_ACTIVE;
 	if (byteIndex)
 	{
 		readingPriority = sendingPriority;
@@ -261,8 +253,6 @@ read_switch(void)
 		readingPriority = 0;
 		readingByte = sendingPriority - 1;
 	}
-
-	readingState = CLUNET_READING_ACTIVE;
 }
 
 /* External interrupt service routine (RAM: 4 bytes) */
@@ -293,14 +283,20 @@ ISR(CLUNET_INT_VECTOR)
 		if (lineFree)
 		{
 			// If number of reading dominant bits greater than we sended:
-			if (bitNum > sendingTaskBits)
+			if (bitNum > dominantTask)
 			{
 				// Откатимся индексами на точку доминантного задания с учетом битстаффинга
 				bitIndex -= dominantTask - (recessiveTask == 5);
+				if (bitIndex & 0x80)
+				{
+					byteIndex--;
+					bitIndex += 8;
+				}
+				
 				read_switch();
 				goto _reading;
 			}
-			
+			readingTime += dominantTask * CLUNET_T;
 		}
 
 		// Interrupt on falling edge (alway mean EARLY ARBITRATION, need save bitNum and switch to READ mode).
@@ -311,13 +307,10 @@ ISR(CLUNET_INT_VECTOR)
 			// Conflict: switch to READ mode & stop send process.
 			if (delta >= (CLUNET_T / 2))
 			{
-				// Conflict! Switch to READ mode! Use bitNum variable!
-				// Откатимся индексами на точку рецессивного задания с учетом битстаффинга
 				read_switch();
 				goto _reading;
 			}
 		}
-
 		return;
 	}
 
