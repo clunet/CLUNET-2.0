@@ -132,14 +132,14 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	// Static RAM variables (3 bytes)
 	static uint8_t sendingByte, numBits, lastActiveBits;
 
-	// If in NOT_ACTIVE state
-	if (!SEND_IS_ACTIVE)
+	// If in NOT ACTIVE state
+	if (!(sendingState & 1))
 	{
 		// Reset reading state
 		readingState = CLUNET_READING_IDLE;
 
 		// If in IDLE state: disable timer output compare interrupt
-		if (SEND_IS_IDLE)
+		if (!sendingState)
 		{
 _disable:
 			CLUNET_DISABLE_TIMER_COMP;
@@ -162,12 +162,14 @@ _delay_1t:
 	// If we need to free line - do it
 	if (lineFree)
 	{
+		readingSyncTime = CLUNET_TIMER_REG; // Save pull-up time for use in read ISR
 		CLUNET_INT_ENABLE; // Enable external interrupt for collision resolving or maybe sending complete (waiting for new packet)
 		CLUNET_SEND_0;
-		readingSyncTime = CLUNET_TIMER_REG;
 	}
 
-	// Если мы должны прижать линию
+	// If we must pull-down line.
+	// In reading ISR we resolve post- & pre- arbitration. In this code we must check that read ISR has been executed.
+	// If not - this is 3-rd type of conflict. In this case we must switch to READ mode and stop sending.
 	else
 	{
 		// Если мы будем прижимать линию, то проверим совпадение переданных и полученных бит, если различны, то конфликт на линии - останавливаем передачу и ждем
