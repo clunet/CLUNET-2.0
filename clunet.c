@@ -264,24 +264,30 @@ ISR(CLUNET_INT_VECTOR)
 			{
 				// Conflict! Switch to READ mode! Use bitNum variable!
 
-				readingBitIndex = sendingBitIndex - sendingTaskBits;
 				readingByteIndex = sendingByteIndex;
+				readingBitIndex = sendingBitIndex - sendingTaskBits;
 
 				if (sendingBitIndex < sendingTaskBits)
 				{
-					readingBitIndex += 8;
 					readingByteIndex--;
+					readingBitIndex += 8;
 				}
 
-				readingPriority = sendingPriority;
-
-				uint8_t idx;
-				for (idx = 0 ; idx <= readingByteIndex ; idx++)
-					readingBuffer[idx] = sendingBuffer[idx];
-
-				sendingTaskBits
-				sendingByteIndex
-				sendingBitIndex
+				if (!readingByteIndex)
+					readingByte = sendingPriority;
+				else
+				{
+					readingPriority = sendingPriority;
+					uint8_t idx;
+					uint8_t length = readingByteIndex - 1;
+					for (idx = 0 ; idx < length ; idx++)
+						readingBuffer[idx] = sendingBuffer[idx];
+					readingByte = sendingBuffer[idx];
+				}
+	
+					sendingTaskBits
+					sendingByteIndex
+					sendingBitIndex
 			}
 			
 		}
