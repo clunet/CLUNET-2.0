@@ -161,7 +161,6 @@ _delay_1t:
 		return;
 	}
 	
-	const uint8_t now = CLUNET_TIMER_REG;
 	const uint8_t lineFree = CLUNET_SENDING;
 
 	// If we need to free line - do it
@@ -184,7 +183,7 @@ _delay_1t:
 		}
 */
 		// If no conflict - disable external interrupt and pull down line
-		readingTime = now;
+		readingTime = CLUNET_TIMER_REG;
 		CLUNET_INT_DISABLE;
 		CLUNET_SEND_1;
 	}
@@ -241,9 +240,10 @@ _delay_1t:
 static void
 read_switch(void)
 {
-
 	CLUNET_DISABLE_TIMER_COMP;
 	sendingState = CLUNET_SENDING_WAIT;
+
+	bitIndex -= dominantTask - (recessiveTask == 5);
 
 	if (bitIndex & 0x80)
 	{
@@ -287,7 +287,7 @@ ISR(CLUNET_INT_VECTOR)
 	}
 
 	/* SENDING MODE */
-	if (SEND_IS_ACTIVE)
+	if (sendingState & 1)
 	{
 		// Interrupt on rising edge (should always run, if bitNum > sendTaskBits mean arbitration)
 		if (lineFree)
@@ -313,7 +313,6 @@ ISR(CLUNET_INT_VECTOR)
 			{
 				// Conflict! Switch to READ mode! Use bitNum variable!
 				// Откатимся индексами на точку рецессивного задания с учетом битстаффинга
-				bitIndex -= recessiveTask - (dominantTask == 5);
 				read_switch();
 				goto _reading;
 			}
@@ -327,6 +326,7 @@ ISR(CLUNET_INT_VECTOR)
 		// Корректируем время по прочитанным битам
 		readingTime += bitNum * CLUNET_T;
 
+		// Planning reset reading state and start sending if in waiting state
 		CLUNET_TIMER_REG_OCR = readingTime + (7 * CLUNET_T - 1);
 		CLUNET_ENABLE_TIMER_COMP;
 	}
