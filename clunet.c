@@ -51,9 +51,7 @@ static uint8_t readingPriority; // Receiving packet priority
 static uint8_t dataByte; // Processing byte
 static uint8_t bitIndex; // Bit index
 static uint8_t byteIndex; // Byte index
-static uint8_t bitStuff; // Bitstuff
 static uint8_t dominantTask; // Dominant task in bits
-static uint8_t recessiveTask; // Recessive task in bits
 
 /* Data buffers */
 static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Sending data buffer
@@ -141,6 +139,9 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 /* Timer output compare interrupt service routine (RAM: 3 bytes) */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
+
+	static uint8_t numBits;
+	
 	// If in NOT ACTIVE state
 	if (!(sendingState & 1))
 	{
@@ -160,7 +161,7 @@ _disable:
 		dataByte = sendingPriority - 1; // First need send priority (3 bits)
 		bitIndex = 5; // Priority bits position
 		byteIndex = 0; // Data index
-		bitStuff = 1; // Start bit
+		numBits = 1; // Start bit
 _delay_1t:
 		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
 		return;
@@ -205,7 +206,6 @@ _delay_1t:
 	}
 
 	/* COLLECTING DATA BITS */
-	uint8_t numBits = bitStuff;
 	do
 	{
 		const uint8_t bitValue = dataByte & (0x80 >> bitIndex);
@@ -229,18 +229,15 @@ _delay_1t:
 	}
 	while (numBits != 5);
 	
-	// Save dominant task & bitstuffing value
+	// Save dominant task
 	if (!lineFree)
-	{
 		dominantTask = numBits;
-		dominantBitStuff = bitStuff;
-	}
 
 	// Update OCR
 	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
 
 	// Bitstuff correction
-	bitStuff = (numBits == 5);
+	numBits = (numBits == 5);
 }
 /* End of ISR(CLUNET_TIMER_COMP_VECTOR) */
 
@@ -292,18 +289,18 @@ ISR(CLUNET_INT_VECTOR)
 			// If number of reading dominant bits greater than we sended:
 			if (bitNum > dominantTask)
 			{
-				// Откатимся индексами на точку доминантного задания с учетом битстаффинга
-				bitIndex -= dominantTask - dominantBitStuff;
+				bitNum -= dominantTask;
+				bitIndex -= bitNum;
 				if (bitIndex & 0x80)
 				{
-					byteIndex--;
 					bitIndex += 8;
+					byteIndex--;
 				}
 				
 				read_switch();
 				goto _reading;
 			}
-			readingTime += dominantTask * CLUNET_T;
+			readingTime += bitNum * CLUNET_T;
 		}
 
 		// Interrupt on falling edge (alway mean EARLY ARBITRATION, need save bitNum and switch to READ mode).
