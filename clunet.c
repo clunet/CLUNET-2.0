@@ -163,7 +163,6 @@ _delay_1t:
 	// If we need to free line - do it
 	if (lineFree)
 	{
-		readingSyncTime = CLUNET_TIMER_REG; // Save pull-up time for use in read ISR
 		CLUNET_INT_ENABLE; // Enable external interrupt for collision resolving or maybe sending complete (waiting for new packet)
 		CLUNET_SEND_0;
 	}
@@ -181,6 +180,7 @@ _delay_1t:
 		}
 
 		// If no conflict - disable external interrupt and pull down line
+		readingSyncTime = CLUNET_TIMER_REG; // Save pull-down time for use in read ISR
 		CLUNET_INT_DISABLE;
 		CLUNET_SEND_1;
 	}
@@ -219,8 +219,8 @@ _delay_1t:
 	}
 	while (numBits != 5);
 	
-	// Save pull-up task time
-	if (lineFree)
+	// Save pull-down task time
+	if (!lineFree)
 		sendingTaskBits = numBits;
 
 	// Update OCR
@@ -259,8 +259,8 @@ ISR(CLUNET_INT_VECTOR)
 		// Interrupt on rising edge (should always run, if bitNum > 0 mean arbitration, save it and switch to reading)
 		if (lineFree)
 		{
-			// Conflict: switch to READ mode & stop send process.
-			if (bitNum)
+			// If number of reading dominant bits greater than we sended:
+			if (bitNum > sendingTaskBits)
 			{
 				// Conflict! Switch to READ mode! Use bitNum variable!
 
@@ -284,6 +284,8 @@ ISR(CLUNET_INT_VECTOR)
 						readingBuffer[idx] = sendingBuffer[idx];
 					readingByte = sendingBuffer[idx];
 				}
+				
+				bitStuff = ((sendingTaskBits + bitNum) == 5);
 	
 					sendingTaskBits
 					sendingByteIndex
