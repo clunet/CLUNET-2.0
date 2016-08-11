@@ -42,6 +42,7 @@ static uint8_t sendingBitIndex; // Sending Bit Index
 static uint8_t sendingByteIndex; // Sending Byte Index
 static uint8_t sendingLength; // Sending Data Length
 static uint8_t sendingPriority; // Sending priority (1 to 8)
+static uint8_t sendingTaskBits; // Sending task
 /* Reading process variables */
 static uint8_t readingState = CLUNET_READING_IDLE; // Current reading state
 //static uint8_t readingActiveBits; // Количество активных прочитанных бит
@@ -130,7 +131,7 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
 	// Static RAM variables (3 bytes)
-	static uint8_t sendingByte, numBits, lastActiveBits;
+	static uint8_t sendingByte, numBits, lastTaskBits;
 
 	// If in NOT ACTIVE state
 	if (!(sendingState & 1))
@@ -173,7 +174,7 @@ _delay_1t:
 	else
 	{
 		// Если мы будем прижимать линию, то проверим совпадение переданных и полученных бит, если различны, то конфликт на линии - останавливаем передачу и ждем
-		if (readingActiveBits != lastActiveBits && !(sendingState == CLUNET_SENDING_INIT && !sendingBitIndex))
+		if (readingActiveBits != lastTaskBits && !(sendingState == CLUNET_SENDING_INIT && !sendingBitIndex))
 		{
 			sendingState = CLUNET_SENDING_WAIT;
 			goto _disable;
@@ -218,9 +219,9 @@ _delay_1t:
 	}
 	while (numBits != 5);
 	
-	// Save pull down time and number of dominant bits that we must send
-	if (!lineFree)
-		lastActiveBits = numBits;
+	// Save pull-up task time
+	if (lineFree)
+		sendingTaskBits = numBits;
 
 	// Update OCR
 	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
@@ -262,6 +263,25 @@ ISR(CLUNET_INT_VECTOR)
 			if (bitNum)
 			{
 				// Conflict! Switch to READ mode! Use bitNum variable!
+
+				readingBitIndex = sendingBitIndex - sendingTaskBits;
+				readingByteIndex = sendingByteIndex;
+
+				if (sendingBitIndex < sendingTaskBits)
+				{
+					readingBitIndex += 8;
+					readingByteIndex--;
+				}
+
+				readingPriority = sendingPriority;
+
+				uint8_t idx;
+				for (idx = 0 ; idx <= readingByteIndex ; idx++)
+					readingBuffer[idx] = sendingBuffer[idx];
+
+				sendingTaskBits
+				sendingByteIndex
+				sendingBitIndex
 			}
 			
 		}
