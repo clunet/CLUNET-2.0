@@ -44,14 +44,13 @@ static uint8_t sendingLength; // Sending data length
 
 /* Reading process variables */
 static uint8_t readingState = CLUNET_READING_IDLE; // Current reading state
+static uint8_t readingTime; // Reading time
 static uint8_t readingPriority; // Receiving packet priority
 
 /* Common variables */
 static uint8_t bitIndex; // Bit index
 static uint8_t byteIndex; // Byte index
-static uint8_t dominantTime; // Start time of dominant bits transmit
 static uint8_t dominantTask; // Dominant task in bits
-static uint8_t recessiveTime; // Start time of recessive bits transmit
 static uint8_t recessiveTask; // Recessive task in bits
 
 /* Data buffers */
@@ -168,7 +167,6 @@ _delay_1t:
 	// If we need to free line - do it
 	if (lineFree)
 	{
-		recessiveTime = now; // Save pull-down time for use in read ISR
 		CLUNET_INT_ENABLE; // Enable external interrupt for collision resolving or maybe sending complete (waiting for new packet)
 		CLUNET_SEND_0;
 	}
@@ -186,7 +184,7 @@ _delay_1t:
 		}
 */
 		// If no conflict - disable external interrupt and pull down line
-		dominantTime = now;
+		readingTime = now;
 		CLUNET_INT_DISABLE;
 		CLUNET_SEND_1;
 	}
@@ -281,7 +279,7 @@ ISR(CLUNET_INT_VECTOR)
 
 	/* Reading number of bits */
 	uint8_t bitNum = 0; // Number of bits
-	uint8_t ticks = now - readingSyncTime;
+	uint8_t ticks = now - readingTime;
 	if ((ticks >= (CLUNET_T / 2)) && (ticks < (CLUNET_T * 5 + CLUNET_T / 2)))
 	{
 		uint8_t period = CLUNET_T / 2;
@@ -327,14 +325,14 @@ ISR(CLUNET_INT_VECTOR)
 	if (lineFree)
 	{
 		// Корректируем время по прочитанным битам
-		dominantTime += bitNum * CLUNET_T;
+		readingTime += bitNum * CLUNET_T;
 
-		CLUNET_TIMER_REG_OCR = readingSyncTime + (7 * CLUNET_T - 1);
+		CLUNET_TIMER_REG_OCR = readingTime + (7 * CLUNET_T - 1);
 		CLUNET_ENABLE_TIMER_COMP;
 	}
 	else
 	{
-		dominantTime = now; // Pulldown sync time
+		readingTime = now; // Pulldown sync time
 		CLUNET_DISABLE_TIMER_COMP;
 
 		// Если в ожидании приема пакета, то переходим к фазе начала приемки кадра, обнуляем счетчики и выходим
