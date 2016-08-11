@@ -150,8 +150,8 @@ _disable:
 		// If in WAIT state: starting sending throuth 1Т
 		sendingState = CLUNET_SENDING_ACTIVE;
 		sendingByte = sendingPriority - 1; // First need send priority 3 bits
-		sendingByteIndex = 0; // Data index
-		sendingBitIndex = 5; // Start of priority bits
+		byteIndex = 0; // Data index
+		recessiveTask = bitIndex = 5; // Start of priority bits
 		numBits = 1; // Start bit
 _delay_1t:
 		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
@@ -210,7 +210,8 @@ _delay_1t:
 				// If data complete: exit and send this last bits
 				if (sendingByteIndex == sendingLength)
 					break;
-				sendingByte = sendBuffer[sendingByteIndex++];
+				sendingByte = readingBuffer[sendingByteIndex] = sendBuffer[sendingByteIndex];
+				sendingByteIndex++;
 				sendingBitIndex = 0;
 			}
 		}
@@ -219,9 +220,11 @@ _delay_1t:
 	}
 	while (numBits != 5);
 	
-	// Save pull-down task time
-	if (!lineFree)
-		sendingTaskBits = numBits;
+	// Save tasks times
+	if (lineFree)
+		recessiveTask = numBits;
+	else
+		dominantTask = numBits;
 
 	// Update OCR
 	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
@@ -231,6 +234,32 @@ _delay_1t:
 }
 /* End of ISR(CLUNET_TIMER_COMP_VECTOR) */
 
+static void
+read_switch(void)
+{
+
+	CLUNET_DISABLE_TIMER_COMP;
+	sendingState = CLUNET_SENDING_WAIT;
+
+	if (bitIndex & 0x80)
+	{
+		byteIndex--;
+		bitIndex += 8;
+	}
+
+	if (byteIndex)
+	{
+		readingPriority = sendingPriority;
+		readingByte = sendingBuffer[byteIndex];
+	}
+	else
+	{
+		readingPriority = 0;
+		readingByte = sendingPriority - 1;
+	}
+
+	readingState = CLUNET_READING_ACTIVE;
+}
 
 /* External interrupt service routine (RAM: 4 bytes) */
 ISR(CLUNET_INT_VECTOR)
@@ -256,40 +285,16 @@ ISR(CLUNET_INT_VECTOR)
 	/* SENDING MODE */
 	if (SEND_IS_ACTIVE)
 	{
-		// Interrupt on rising edge (should always run, if bitNum > 0 mean arbitration, save it and switch to reading)
+		// Interrupt on rising edge (should always run, if bitNum > sendTaskBits mean arbitration)
 		if (lineFree)
 		{
 			// If number of reading dominant bits greater than we sended:
 			if (bitNum > sendingTaskBits)
 			{
-				// Conflict! Switch to READ mode! Use bitNum variable!
-
-				readingByteIndex = sendingByteIndex;
-				readingBitIndex = sendingBitIndex - sendingTaskBits;
-
-				if (sendingBitIndex < sendingTaskBits)
-				{
-					readingByteIndex--;
-					readingBitIndex += 8;
-				}
-
-				if (!readingByteIndex)
-					readingByte = sendingPriority;
-				else
-				{
-					readingPriority = sendingPriority;
-					uint8_t idx;
-					uint8_t length = readingByteIndex - 1;
-					for (idx = 0 ; idx < length ; idx++)
-						readingBuffer[idx] = sendingBuffer[idx];
-					readingByte = sendingBuffer[idx];
-				}
-				
-				bitStuff = ((sendingTaskBits + bitNum) == 5);
-	
-					sendingTaskBits
-					sendingByteIndex
-					sendingBitIndex
+				// Откатимся индексами на точку доминантного задания с учетом битстаффинга
+				bitIndex -= dominantTask - (recessiveTask == 5);
+				read_switch();
+				goto _reading;
 			}
 			
 		}
@@ -303,11 +308,13 @@ ISR(CLUNET_INT_VECTOR)
 			if (delta >= (CLUNET_T / 2))
 			{
 				// Conflict! Switch to READ mode! Use bitNum variable!
+				// Откатимся индексами на точку рецессивного задания с учетом битстаффинга
+				bitIndex -= recessiveTask - (dominantTask == 5);
+				read_switch();
+				goto _reading;
 			}
 		}
 
-		CLUNET_DISABLE_TIMER_COMP;
-		sendingState = CLUNET_SENDING_WAIT;
 		return;
 	}
 
@@ -335,6 +342,8 @@ ISR(CLUNET_INT_VECTOR)
 		}
 
 	}
+
+_reading:
 
 	// Если линия освободилась, значит была единичная посылка - установим соответствующие биты
 	if (lineFree)
