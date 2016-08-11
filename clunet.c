@@ -48,6 +48,7 @@ static uint8_t readingTime; // Reading time
 static uint8_t readingPriority; // Receiving packet priority
 
 /* Common variables */
+static uint8_t dataByte; // Processing byte
 static uint8_t bitIndex; // Bit index
 static uint8_t byteIndex; // Byte index
 static uint8_t dominantTask; // Dominant task in bits
@@ -152,7 +153,7 @@ _disable:
 
 		// If in WAIT state: starting sending throuth 1Т
 		sendingState = CLUNET_SENDING_ACTIVE;
-		sendingByte = sendingPriority - 1; // First need send priority 3 bits
+		dataByte = sendingPriority - 1; // First need send priority 3 bits
 		byteIndex = 0; // Data index
 		recessiveTask = bitIndex = 5; // Start of priority bits
 		numBits = 1; // Start bit
@@ -202,7 +203,7 @@ _delay_1t:
 	/* COLLECTING DATA BITS */
 	do
 	{
-		const uint8_t bitValue = sendingByte & (0x80 >> bitIndex);
+		const uint8_t bitValue = dataByte & (0x80 >> bitIndex);
 		if ((lineFree && !bitValue) || (!lineFree && bitValue))
 		{
 			numBits++;
@@ -213,7 +214,7 @@ _delay_1t:
 				// If data complete: exit and send this last bits
 				if (byteIndex == sendingLength)
 					break;
-				sendingByte = readingBuffer[byteIndex] = sendBuffer[byteIndex];
+				dataByte = readingBuffer[byteIndex] = sendBuffer[byteIndex];
 				byteIndex++;
 				bitIndex = 0;
 			}
@@ -246,12 +247,12 @@ read_switch(void)
 	if (byteIndex)
 	{
 		readingPriority = sendingPriority;
-		readingByte = sendingBuffer[byteIndex];
+		dataByte = sendingBuffer[byteIndex];
 	}
 	else
 	{
 		readingPriority = 0;
-		readingByte = sendingPriority - 1;
+		dataByte = sendingPriority - 1;
 	}
 }
 
@@ -332,7 +333,7 @@ ISR(CLUNET_INT_VECTOR)
 		if (!readingState)
 		{
 			readingState = CLUNET_READING_ACTIVE;
-			readingByte = readingPriority = byteIndex = crc = 0;
+			dataByte = readingPriority = byteIndex = crc = 0;
 			bitIndex = 5;
 			bitStuff = 1;
 			return;
@@ -344,11 +345,11 @@ _reading:
 
 	// Если линия освободилась, значит была единичная посылка - установим соответствующие биты
 	if (lineFree)
-		readingByte |= (0xFF >> bitIndex);
+		dataByte |= (0xFF >> bitIndex);
 
 	// Если линия прижалась, значит была нулевая посылка - сбросим соответствующие биты
 	else
-		readingByte &= ~(0xFF >> bitIndex);
+		dataByte &= ~(0xFF >> bitIndex);
 
 	// Обновим битовый индекс с учетом битстаффинга
 	bitIndex += bitNum - bitStuff;
@@ -357,15 +358,15 @@ _reading:
 	{
 		// Readed priority
 		if (!readingPriority)
-			readingPriority = readingByte + 1;
+			readingPriority = dataByte + 1;
 		else
 		{
-			readBuffer[byteIndex] = readingByte;
+			readBuffer[byteIndex] = dataByte;
 
 			/* Update Maxim iButton 8-bit CRC with received byte */
 	
 			uint8_t b = 8;
-			uint8_t inbyte = readingByte;
+			uint8_t inbyte = dataByte;
 	
 			do
 			{
@@ -398,7 +399,7 @@ _reading:
 			else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
 			{
 				bitIndex &= 7;
-				readBuffer[byteIndex] = lineFree;
+				dataByte = lineFree;
 			}
 	
 			// Иначе ошибка: нехватка приемного буфера -> игнорируем пакет
