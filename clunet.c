@@ -31,6 +31,14 @@ SOFTWARE.
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 
+#define CLUNET_SENDING_IDLE 0
+#define CLUNET_SENDING_ACTIVE 1
+#define CLUNET_SENDING_WAIT 2
+
+#define CLUNET_READING_IDLE 0
+#define CLUNET_READING_ACTIVE 1
+#define CLUNET_READING_ERROR 2
+
 /* Указатели на функции обратного вызова при получении пакетов (должны быть как можно короче) (ОЗУ: 4 байта при МК с 16-битной адресацией) */
 static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
@@ -60,14 +68,6 @@ static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Reading data buffer
 #ifdef CLUNET_DEVICE_NAME
  static const char devName[] = CLUNET_DEVICE_NAME; // Simple and short device name
 #endif
-
-#define CLUNET_SENDING_IDLE 0
-#define CLUNET_SENDING_ACTIVE 1
-#define CLUNET_SENDING_WAIT 2
-
-#define CLUNET_READING_IDLE 0
-#define CLUNET_READING_ACTIVE 1
-#define CLUNET_READING_ERROR 2
 
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
 static char
@@ -251,7 +251,7 @@ read_switch(void)
 	if (byteIndex)
 	{
 		readingPriority = sendingPriority;
-		dataByte = sendingBuffer[byteIndex];
+		dataByte = sendBuffer[byteIndex];
 	}
 	else
 	{
