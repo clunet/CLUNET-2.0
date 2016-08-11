@@ -35,20 +35,24 @@ SOFTWARE.
 static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
-/* Global static variables (RAM: 5 bytes) */
+/* Global static variables (RAM: 11 bytes) */
+
 /* Sending process variables */
 static uint8_t sendingState = CLUNET_SENDING_IDLE; // Current sending state
-static uint8_t sendingBitIndex; // Sending Bit Index
-static uint8_t sendingByteIndex; // Sending Byte Index
-static uint8_t sendingLength; // Sending Data Length
 static uint8_t sendingPriority; // Sending priority (1 to 8)
-static uint8_t sendingTaskBits; // Sending task
+static uint8_t sendingLength; // Sending data length
+
 /* Reading process variables */
 static uint8_t readingState = CLUNET_READING_IDLE; // Current reading state
-//static uint8_t readingActiveBits; // Количество активных прочитанных бит
-static uint8_t readingSyncTime; // Reading Sync Time
 static uint8_t readingPriority; // Receiving packet priority
 
+/* Common variables */
+static uint8_t bitIndex; // Bit index
+static uint8_t byteIndex; // Byte index
+static uint8_t dominantTime; // Start time of dominant bits transmit
+static uint8_t dominantTask; // Dominant task in bits
+static uint8_t recessiveTime; // Start time of recessive bits transmit
+static uint8_t recessiveTask; // Recessive task in bits
 
 /* Data buffers */
 static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Sending data buffer
