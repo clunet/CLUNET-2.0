@@ -220,7 +220,7 @@ _delay_1t:
 				// If data complete: exit and send this last bits
 				if (byteIndex == sendingLength)
 					break;
-				dataByte = readingBuffer[byteIndex] = sendBuffer[byteIndex];
+				dataByte = readBuffer[byteIndex] = sendBuffer[byteIndex];
 				byteIndex++;
 				bitIndex = 0;
 			}
