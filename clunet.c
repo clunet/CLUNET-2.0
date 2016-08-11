@@ -35,7 +35,7 @@ SOFTWARE.
 static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
-/* Global static variables (RAM: 11 bytes) */
+/* Global static variables (RAM: 10 bytes) */
 
 /* Sending process variables */
 static uint8_t sendingState = CLUNET_SENDING_IDLE; // Current sending state
@@ -66,9 +66,8 @@ static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Reading data buffer
 #define CLUNET_SENDING_WAIT 2
 
 #define CLUNET_READING_IDLE 0
-#define CLUNET_READING_START 1
-#define CLUNET_READING_DATA 2
-#define CLUNET_READING_ERROR 8
+#define CLUNET_READING_ACTIVE 1
+#define CLUNET_READING_ERROR 2
 
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
 static char
@@ -136,7 +135,7 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 	}
 }
 
-/* Timer output compare interrupt service routine (RAM: 3 bytes) */
+/* Timer output compare interrupt service routine (RAM: 1 byte) */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
 
@@ -195,7 +194,7 @@ _delay_1t:
 	}
 
 	// If sending data complete: send 1T stop-bit or finish sending process.
-	if (sendingBitIndex & 8)
+	if (bitIndex & 8)
 	{
 		// If we pull down the line - send 1T stop-bit.
 		if (!lineFree)
@@ -259,11 +258,11 @@ read_switch(void)
 	}
 }
 
-/* External interrupt service routine (RAM: 4 bytes) */
+/* External interrupt service routine (RAM: 2 bytes) */
 ISR(CLUNET_INT_VECTOR)
 {
-	// Static variables (RAM: 5 bytes)
-	static uint8_t readingByte, bitStuff, crc;
+	// Static variables (RAM: 2 bytes)
+	static uint8_t bitStuff, crc;
 
 	// Current timer value
 	const uint8_t now = CLUNET_TIMER_REG;
