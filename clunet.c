@@ -51,6 +51,7 @@ static uint8_t readingPriority; // Receiving packet priority
 static uint8_t dataByte; // Processing byte
 static uint8_t bitIndex; // Bit index
 static uint8_t byteIndex; // Byte index
+static uint8_t bitStuff; // Bitstuff
 static uint8_t dominantTask; // Dominant task in bits
 static uint8_t recessiveTask; // Recessive task in bits
 
@@ -62,8 +63,14 @@ static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Reading data buffer
  static const char devName[] = CLUNET_DEVICE_NAME; // Simple and short device name
 #endif
 
-#define SEND_IS_ACTIVE (sendingState & 1)
-#define SEND_IS_IDLE (!sendingState)
+#define CLUNET_SENDING_IDLE 0
+#define CLUNET_SENDING_ACTIVE 1
+#define CLUNET_SENDING_WAIT 2
+
+#define CLUNET_READING_IDLE 0
+#define CLUNET_READING_START 1
+#define CLUNET_READING_DATA 2
+#define CLUNET_READING_ERROR 8
 
 /* Функция нахождения контрольной суммы Maxim iButton 8-bit */
 static char
@@ -134,9 +141,6 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 /* Timer output compare interrupt service routine (RAM: 3 bytes) */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
-	// Static RAM variables (2 bytes)
-	static uint8_t sendingByte, numBits;
-
 	// If in NOT ACTIVE state
 	if (!(sendingState & 1))
 	{
@@ -153,10 +157,10 @@ _disable:
 
 		// If in WAIT state: starting sending throuth 1Т
 		sendingState = CLUNET_SENDING_ACTIVE;
-		dataByte = sendingPriority - 1; // First need send priority 3 bits
+		dataByte = sendingPriority - 1; // First need send priority (3 bits)
+		bitIndex = 5; // Priority bits position
 		byteIndex = 0; // Data index
-		recessiveTask = bitIndex = 5; // Start of priority bits
-		numBits = 1; // Start bit
+		bitStuff = 1; // Start bit
 _delay_1t:
 		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
 		return;
@@ -201,6 +205,7 @@ _delay_1t:
 	}
 
 	/* COLLECTING DATA BITS */
+	uint8_t numBits = bitStuff;
 	do
 	{
 		const uint8_t bitValue = dataByte & (0x80 >> bitIndex);
@@ -224,17 +229,18 @@ _delay_1t:
 	}
 	while (numBits != 5);
 	
-	// Save tasks times
-	if (lineFree)
-		recessiveTask = numBits;
-	else
+	// Save dominant task & bitstuffing value
+	if (!lineFree)
+	{
 		dominantTask = numBits;
+		dominantBitStuff = bitStuff;
+	}
 
 	// Update OCR
 	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
 
 	// Bitstuff correction
-	numBits = (numBits == 5);
+	bitStuff = (numBits == 5);
 }
 /* End of ISR(CLUNET_TIMER_COMP_VECTOR) */
 
@@ -287,7 +293,7 @@ ISR(CLUNET_INT_VECTOR)
 			if (bitNum > dominantTask)
 			{
 				// Откатимся индексами на точку доминантного задания с учетом битстаффинга
-				bitIndex -= dominantTask - (recessiveTask == 5);
+				bitIndex -= dominantTask - dominantBitStuff;
 				if (bitIndex & 0x80)
 				{
 					byteIndex--;
