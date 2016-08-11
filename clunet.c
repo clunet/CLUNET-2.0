@@ -201,6 +201,8 @@ _delay_1t:
 			goto _delay_1t;
 
 		sendingState = CLUNET_SENDING_IDLE;
+//		if (cbDataReceivedSniff)
+//			(*cbDataReceivedSniff)(src_address, dst_address, command, data, size);
 		goto _disable;
 	}
 
