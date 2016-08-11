@@ -290,13 +290,6 @@ ISR(CLUNET_INT_VECTOR)
 			if (bitNum > dominantTask)
 			{
 				bitNum -= dominantTask;
-				bitIndex -= bitNum;
-				if (bitIndex & 0x80)
-				{
-					bitIndex += 8;
-					byteIndex--;
-				}
-				
 				read_switch();
 				goto _reading;
 			}
