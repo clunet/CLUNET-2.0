@@ -278,7 +278,7 @@ ISR(CLUNET_INT_VECTOR)
 		uint8_t period = CLUNET_T / 2;
 		for ( ; ticks >= period; period += CLUNET_T, bitNum++);
 	}
-
+	
 	/* SENDING MODE */
 	if (sendingState & 1)
 	{
@@ -310,6 +310,9 @@ ISR(CLUNET_INT_VECTOR)
 		return;
 	}
 
+	if (!bitNum)
+		readingState = CLUNET_READING_ERROR;
+
 	if (lineFree)
 	{
 		// Корректируем время по прочитанным битам
@@ -335,6 +338,9 @@ ISR(CLUNET_INT_VECTOR)
 		}
 
 	}
+
+	if (!(readingState & 1))
+		return;
 
 _reading:
 
@@ -376,7 +382,7 @@ _reading:
 			// Если пакет прочитан полностью, то проверим контрольную сумму
 			if ((++byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
 			{
-				readingState = CLUNET_READING_IDLE;
+				readingState = CLUNET_READING_ERROR;
 				// If CRC is correct - process incoming packet
 				if (!crc)
 				{
@@ -389,7 +395,7 @@ _reading:
 					);
 				}
 			}
-	
+			
 			// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
 			else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
 			{
@@ -399,7 +405,7 @@ _reading:
 	
 			// Иначе ошибка: нехватка приемного буфера -> игнорируем пакет
 			else
-				readingState = CLUNET_READING_IDLE;
+				readingState = CLUNET_READING_ERROR;
 		}
 	}
 
