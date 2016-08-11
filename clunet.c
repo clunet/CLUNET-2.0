@@ -134,8 +134,8 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 /* Timer output compare interrupt service routine (RAM: 3 bytes) */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
-	// Static RAM variables (3 bytes)
-	static uint8_t sendingByte, numBits, lastTaskBits;
+	// Static RAM variables (2 bytes)
+	static uint8_t sendingByte, numBits;
 
 	// If in NOT ACTIVE state
 	if (!(sendingState & 1))
@@ -161,12 +161,14 @@ _delay_1t:
 		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
 		return;
 	}
-
+	
+	const uint8_t now = CLUNET_TIMER_REG;
 	const uint8_t lineFree = CLUNET_SENDING;
 
 	// If we need to free line - do it
 	if (lineFree)
 	{
+		recessiveTime = now; // Save pull-down time for use in read ISR
 		CLUNET_INT_ENABLE; // Enable external interrupt for collision resolving or maybe sending complete (waiting for new packet)
 		CLUNET_SEND_0;
 	}
@@ -177,14 +179,14 @@ _delay_1t:
 	else
 	{
 		// Если мы будем прижимать линию, то проверим совпадение переданных и полученных бит, если различны, то конфликт на линии - останавливаем передачу и ждем
-		if (readingActiveBits != lastTaskBits && !(sendingState == CLUNET_SENDING_INIT && !sendingBitIndex))
+/*		if (readingActiveBits != lastTaskBits && !(sendingState == CLUNET_SENDING_INIT && !sendingBitIndex))
 		{
 			sendingState = CLUNET_SENDING_WAIT;
 			goto _disable;
 		}
-
+*/
 		// If no conflict - disable external interrupt and pull down line
-		readingSyncTime = CLUNET_TIMER_REG; // Save pull-down time for use in read ISR
+		dominantTime = now;
 		CLUNET_INT_DISABLE;
 		CLUNET_SEND_1;
 	}
@@ -203,20 +205,20 @@ _delay_1t:
 	/* COLLECTING DATA BITS */
 	do
 	{
-		const uint8_t bitValue = sendingByte & (0x80 >> sendingBitIndex);
+		const uint8_t bitValue = sendingByte & (0x80 >> bitIndex);
 		if ((lineFree && !bitValue) || (!lineFree && bitValue))
 		{
 			numBits++;
 
 			// If sending byte complete: reset bit index and get next byte to send
-			if (++sendingBitIndex & 8)
+			if (++bitIndex & 8)
 			{
 				// If data complete: exit and send this last bits
-				if (sendingByteIndex == sendingLength)
+				if (byteIndex == sendingLength)
 					break;
-				sendingByte = readingBuffer[sendingByteIndex] = sendBuffer[sendingByteIndex];
-				sendingByteIndex++;
-				sendingBitIndex = 0;
+				sendingByte = readingBuffer[byteIndex] = sendBuffer[byteIndex];
+				byteIndex++;
+				bitIndex = 0;
 			}
 		}
 		else
@@ -269,7 +271,7 @@ read_switch(void)
 ISR(CLUNET_INT_VECTOR)
 {
 	// Static variables (RAM: 5 bytes)
-	static uint8_t bitIndex, byteIndex, readingByte, bitStuff, crc;
+	static uint8_t readingByte, bitStuff, crc;
 
 	// Current timer value
 	const uint8_t now = CLUNET_TIMER_REG;
@@ -325,14 +327,14 @@ ISR(CLUNET_INT_VECTOR)
 	if (lineFree)
 	{
 		// Корректируем время по прочитанным битам
-		readingSyncTime += bitNum * CLUNET_T;
+		dominantTime += bitNum * CLUNET_T;
 
 		CLUNET_TIMER_REG_OCR = readingSyncTime + (7 * CLUNET_T - 1);
 		CLUNET_ENABLE_TIMER_COMP;
 	}
 	else
 	{
-		readingSyncTime = now; // Pulldown sync time
+		dominantTime = now; // Pulldown sync time
 		CLUNET_DISABLE_TIMER_COMP;
 
 		// Если в ожидании приема пакета, то переходим к фазе начала приемки кадра, обнуляем счетчики и выходим
