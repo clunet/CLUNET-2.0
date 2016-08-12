@@ -298,13 +298,15 @@ ISR(CLUNET_INT_VECTOR)
 	if (!(readingState & 1))
 		return;
 	
+	const uint8_t mask = (0xFF >> bitIndex);
+	
 	// Если линия освободилась, значит была единичная посылка - установим соответствующие биты
 	if (lineFree)
-		dataByte |= (0xFF >> bitIndex);
+		dataByte |= mask;
 
 	// Если линия прижалась, значит была нулевая посылка - сбросим соответствующие биты
 	else
-		dataByte &= ~(0xFF >> bitIndex);
+		dataByte &= ~mask;
 
 	// Update bit index with bitstuff correction
 	bitIndex += bitNum - bitStuff;
