@@ -261,9 +261,11 @@ ISR(CLUNET_INT_VECTOR)
 		{
 			CLUNET_DISABLE_TIMER_COMP;
 			sendingState = CLUNET_SENDING_WAIT_INTERFRAME;
+			recessiveTask = 1; // Become CRC check flag.
 		}
 		// Use as reading interrupt flag (reset it)
-		recessiveTask = 0;
+		else
+			recessiveTask = 0;
 	}
 	else if (lineFree)
 	{
@@ -288,6 +290,7 @@ ISR(CLUNET_INT_VECTOR)
 			dataByte = readingPriority = byteIndex = crc = 0;
 			bitIndex = 5;
 			bitStuff = 1;
+			recessiveTask = 1;
 			return;
 		}
 	}
@@ -340,9 +343,8 @@ ISR(CLUNET_INT_VECTOR)
 		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
 		{
 			readingState = CLUNET_READING_WAIT_INTERFRAME;
-			// If CRC is correct - process incoming packet
-//			if (!crc)
-			if ((sendingState & 1) || !check_crc(readBuffer, byteIndex))
+			// Check CRC only if we not sending (save CPU time)
+			if (!recessiveTask || !check_crc(readBuffer, byteIndex))
 			{
 				clunet_data_received (
 					readBuffer[CLUNET_OFFSET_SRC_ADDRESS],
