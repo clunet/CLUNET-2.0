@@ -60,6 +60,7 @@ static uint8_t dataByte; // Processing byte
 static uint8_t bitIndex; // Bit index
 static uint8_t byteIndex; // Byte index
 static uint8_t dominantTask; // Dominant task in bits
+static uint8_t recessiveTask; // Recessive task in bits
 
 /* Data buffers */
 static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Sending data buffer
@@ -249,16 +250,9 @@ read_switch(void)
 	sendingState = CLUNET_SENDING_WAIT;
 	readingState = CLUNET_READING_ACTIVE;
 	if (byteIndex)
-	{
 		readingPriority = sendingPriority;
-		byteIndex--;
-		//dataByte = sendBuffer[--byteIndex];
-	}
 	else
-	{
 		readingPriority = 0;
-		//dataByte = sendingPriority - 1;
-	}
 }
 
 /* External interrupt service routine (RAM: 2 bytes) */
@@ -281,7 +275,6 @@ ISR(CLUNET_INT_VECTOR)
 		uint8_t period = CLUNET_T / 2;
 		for ( ; ticks >= period; period += CLUNET_T, bitNum++);
 	}
-	
 	// Update reading time value
 	if (lineFree)
 		readingTime += bitNum * CLUNET_T;
@@ -310,8 +303,14 @@ ISR(CLUNET_INT_VECTOR)
 			bitIndex -= bitNum;
 			if (bitIndex & 0x80)
 			{
-				byteIndex--;
 				bitIndex += 8;
+				if (--byteIndex)
+				{
+					dataByte = sendBuffer[byteIndex];
+					
+				}
+				else
+					dataByte = sendingPriority - 1;
 			}
 			read_switch();
 			goto _reading;
@@ -324,18 +323,13 @@ ISR(CLUNET_INT_VECTOR)
 
 	if (lineFree)
 	{
-		// Корректируем время по прочитанным битам
-		readingTime += bitNum * CLUNET_T;
-
 		// Planning reset reading state and start sending if in waiting state
 		CLUNET_TIMER_REG_OCR = readingTime + (7 * CLUNET_T - 1);
 		CLUNET_ENABLE_TIMER_COMP;
 	}
 	else
 	{
-		readingTime = now; // Pulldown sync time
 		CLUNET_DISABLE_TIMER_COMP;
-
 		// Если в ожидании приема пакета, то переходим к фазе начала приемки кадра, обнуляем счетчики и выходим
 		if (!readingState)
 		{
@@ -345,7 +339,6 @@ ISR(CLUNET_INT_VECTOR)
 			bitStuff = 1;
 			return;
 		}
-
 	}
 
 	if (!(readingState & 1))
