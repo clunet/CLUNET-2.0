@@ -323,7 +323,7 @@ ISR(CLUNET_INT_VECTOR)
 			readBuffer[byteIndex++] = dataByte;
 
 			/* Update Maxim iButton 8-bit CRC with received byte */
-			uint8_t b = 8;
+/*			uint8_t b = 8;
 			uint8_t inbyte = dataByte;
 			do
 			{
@@ -334,14 +334,15 @@ ISR(CLUNET_INT_VECTOR)
 				inbyte >>= 1;
 			}
 			while (--b);
-		}
+*/		}
 		
 		// Whole packet readed
 		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
 		{
 			readingState = CLUNET_READING_WAIT_INTERFRAME;
 			// If CRC is correct - process incoming packet
-			if (!crc)
+//			if (!crc)
+			if (!check_crc(readBuffer, byteIndex))
 			{
 				clunet_data_received (
 					readBuffer[CLUNET_OFFSET_SRC_ADDRESS],
