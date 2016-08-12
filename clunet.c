@@ -33,11 +33,11 @@ SOFTWARE.
 
 #define CLUNET_SENDING_IDLE 0
 #define CLUNET_SENDING_ACTIVE 1
-#define CLUNET_SENDING_WAIT 2
+#define CLUNET_SENDING_WAIT_INTERFRAME 2
 
 #define CLUNET_READING_IDLE 0
 #define CLUNET_READING_ACTIVE 1
-#define CLUNET_READING_ERROR 2
+#define CLUNET_READING_WAIT_INTERFRAME 2
 
 /* Указатели на функции обратного вызова при получении пакетов (должны быть как можно короче) (ОЗУ: 4 байта при МК с 16-битной адресацией) */
 static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
@@ -52,15 +52,11 @@ static uint8_t sendingLength; // Sending data length
 
 /* Reading process variables */
 static uint8_t readingState = CLUNET_READING_IDLE; // Current reading state
-static uint8_t readingTime; // Reading time
 static uint8_t readingPriority; // Receiving packet priority
 
 /* Common variables */
-static uint8_t dataByte; // Processing byte
-static uint8_t bitIndex; // Bit index
-static uint8_t byteIndex; // Byte index
-static uint8_t dominantTask; // Dominant task in bits
-static uint8_t recessiveTask; // Recessive task in bits
+static uint8_t dominantTask; // Dominant task (bits)
+static uint8_t recessiveTask; // Recessive task (bits)
 
 /* Data buffers */
 static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Sending data buffer
@@ -136,11 +132,11 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 	}
 }
 
-/* Timer output compare interrupt service routine (RAM: 1 byte) */
+/* Timer output compare interrupt service routine (RAM: 4 bytes) */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
 
-	static uint8_t numBits;
+	static uint8_t dataByte, byteIndex, bitIndex, numBits;
 	
 	// If in NOT ACTIVE state
 	if (!(sendingState & 1))
@@ -156,11 +152,12 @@ _disable:
 			return;
 		}
 
-		// If in WAIT state: starting sending throuth 1Т
+		// If in WAIT_INTERFRAME state: starting sending throuth 1Т
 		sendingState = CLUNET_SENDING_ACTIVE;
 		dataByte = sendingPriority - 1; // First need send priority (3 bits)
 		bitIndex = 5; // Priority bits position
 		byteIndex = 0; // Data index
+		recessiveTask = 0; // Reset recessive task
 		numBits = 1; // Start bit
 _delay_1t:
 		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
@@ -178,6 +175,7 @@ _delay_1t:
 		{
 			CLUNET_DISABLE_TIMER_COMP;
 			sendingState = CLUNET_SENDING_IDLE;
+
 			// Execute sniffer callback (if exists)
 	//		if (cbDataReceivedSniff)
 	//			(*cbDataReceivedSniff)(src_address, dst_address, command, data, size);
@@ -199,6 +197,8 @@ _delay_1t:
 */
 		// If no conflict
 		CLUNET_SEND_1;
+
+		// If data sending complete
 		if (bitIndex & 8)
 		{
 			CLUNET_TIMER_REG_OCR += CLUNET_T;
@@ -238,126 +238,59 @@ _delay_1t:
 		recessiveTask = numBits;
 	else
 		dominantTask = numBits;
+
 	// Bitstuff correction
 	numBits = (numBits == 5);
 }
 /* End of ISR(CLUNET_TIMER_COMP_VECTOR) */
 
-static void
-read_switch(void)
-{
-	CLUNET_DISABLE_TIMER_COMP;
-	sendingState = CLUNET_SENDING_WAIT;
-	readingState = CLUNET_READING_ACTIVE;
-	if (byteIndex)
-		readingPriority = sendingPriority;
-	else
-		readingPriority = 0;
-}
-
 /* External interrupt service routine (RAM: 2 bytes) */
 ISR(CLUNET_INT_VECTOR)
 {
 	// Static variables (RAM: 2 bytes)
-	static uint8_t bitStuff, crc;
+	static uint8_t dataByte, byteIndex, bitIndex, bitStuff, lastTime, crc;
 
-	// Current timer value
 	const uint8_t now = CLUNET_TIMER_REG;
-
-	// Многоцелевая переменная состояния линии и заполнения байт соответствующими значениями
 	const uint8_t lineFree = CLUNET_READING ? 0x00 : 0xFF;
+	const uint8_t ticks = now - lastTime;
 
 	// Reading bits
 	uint8_t bitNum = 0; // Number of reading bits
-	uint8_t ticks = now - readingTime;
-	if ((ticks >= (CLUNET_T / 2)) && (ticks < (CLUNET_T * 5 + CLUNET_T / 2)))
+	const uint8_t t12 = CLUNET_T / 2;
+	if ((ticks >= t12) && (ticks < (5 * CLUNET_T + t12)))
 	{
-		uint8_t period = CLUNET_T / 2;
+		uint8_t period = t12;
 		for ( ; ticks >= period; period += CLUNET_T, bitNum++);
 	}
-	// Update reading time value
-	if (lineFree)
-		readingTime += bitNum * CLUNET_T;
 	else
-		readingTime = now;
+		readingState = CLUNET_READING_WAIT_INTERFRAME;
 
-	/* SENDING MODE */
+	/* SENDING ACTIVE */
 	if (sendingState & 1)
 	{
-		// Interrupt on rising edge (should always run, if bitNum > sendTaskBits mean arbitration)
-		if (lineFree)
+		if ((lineFree && (bitNum > dominantTask)) || (!lineFree && (bitNum < recessiveTask)))
 		{
-			// If number of reading dominant bits greater than we sended:
-			if (bitNum > dominantTask)
-			{
-				CLUNET_DISABLE_TIMER_COMP;
-				sendingState = CLUNET_SENDING_WAIT;
-				readingState = CLUNET_READING_ACTIVE;
-
-				bitNum -= dominantTask;
-
-				if (byteIndex)
-				{
-					readingPriority = sendingPriority;
-					byteIndex--;
-				}
-				else
-					readingPriority = 0;
-
-				goto _reading;
-			}
-		}
-
-		// Interrupt on falling edge (alway mean EARLY ARBITRATION, need save bitNum and switch to READ mode).
-		// We in this code only if someone device pull down the line before us.
-		else if (bitNum < recessiveTask)
-		{
-
 			CLUNET_DISABLE_TIMER_COMP;
-			sendingState = CLUNET_SENDING_WAIT;
-			readingState = CLUNET_READING_ACTIVE;
-
-			bitIndex -= bitNum;
-			if (bitIndex & 0x80)
-			{
-				bitIndex += 8;
-				if (--byteIndex)
-				{
-					readingPriority = sendingPriority;
-					dataByte = sendBuffer[byteIndex--];
-				}
-				else
-				{
-					readingPriority = 0;
-					dataByte = sendingPriority - 1;
-				}
-			}
-			else if (byteIndex)
-			{
-				readingPriority = sendingPriority;
-				byteIndex--;
-			}
-			else
-				readingPriority = 0;
-
-			goto _reading;
+			sendingState = CLUNET_SENDING_WAIT_INTERFRAME;
 		}
-		return;
 	}
-
-	if (!bitNum)
-		readingState = CLUNET_READING_ERROR;
-
-	if (lineFree)
+	else if (lineFree)
 	{
 		// Planning reset reading state and start sending if in waiting state
-		CLUNET_TIMER_REG_OCR = readingTime + (7 * CLUNET_T - 1);
+		CLUNET_TIMER_REG_OCR = now + (7 * CLUNET_T - 1);
 		CLUNET_ENABLE_TIMER_COMP;
 	}
 	else
 	{
 		CLUNET_DISABLE_TIMER_COMP;
-		// Если в ожидании приема пакета, то переходим к фазе начала приемки кадра, обнуляем счетчики и выходим
+	}
+	
+	// Update reading time value
+	if (lineFree)
+		lastTime += bitNum * CLUNET_T;
+	else
+	{
+		lastTime = now;
 		if (!readingState)
 		{
 			readingState = CLUNET_READING_ACTIVE;
@@ -367,12 +300,12 @@ ISR(CLUNET_INT_VECTOR)
 			return;
 		}
 	}
-
+	
 	if (!(readingState & 1))
 		return;
-
-_reading:
-
+	
+	bitNum -= bitStuff; // Bitstuff correction
+	
 	// Если линия освободилась, значит была единичная посылка - установим соответствующие биты
 	if (lineFree)
 		dataByte |= (0xFF >> bitIndex);
@@ -382,7 +315,7 @@ _reading:
 		dataByte &= ~(0xFF >> bitIndex);
 
 	// Обновим битовый индекс с учетом битстаффинга
-	bitIndex += bitNum - bitStuff;
+	bitIndex += bitNum;
 
 	if (bitIndex & 8)
 	{
@@ -391,13 +324,11 @@ _reading:
 			readingPriority = dataByte + 1;
 		else
 		{
-			readBuffer[byteIndex] = dataByte;
+			readBuffer[byteIndex++] = dataByte;
 
 			/* Update Maxim iButton 8-bit CRC with received byte */
-	
 			uint8_t b = 8;
 			uint8_t inbyte = dataByte;
-	
 			do
 			{
 				uint8_t mix = crc ^ inbyte;
@@ -407,35 +338,35 @@ _reading:
 				inbyte >>= 1;
 			}
 			while (--b);
-			
-			// Если пакет прочитан полностью, то проверим контрольную сумму
-			if ((++byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
-			{
-				readingState = CLUNET_READING_ERROR;
-				// If CRC is correct - process incoming packet
-				if (!crc)
-				{
-					clunet_data_received (
-						readBuffer[CLUNET_OFFSET_SRC_ADDRESS],
-						readBuffer[CLUNET_OFFSET_DST_ADDRESS],
-						readBuffer[CLUNET_OFFSET_COMMAND],
-						readBuffer + CLUNET_OFFSET_DATA,
-						readBuffer[CLUNET_OFFSET_SIZE]
-					);
-				}
-			}
-			
-			// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
-			else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
-			{
-				bitIndex &= 7;
-				dataByte = lineFree;
-			}
-	
-			// Иначе ошибка: нехватка приемного буфера -> игнорируем пакет
-			else
-				readingState = CLUNET_READING_ERROR;
 		}
+			
+		// Если пакет прочитан полностью, то проверим контрольную сумму
+		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
+		{
+			readingState = CLUNET_READING_WAIT_INTERFRAME;
+			// If CRC is correct - process incoming packet
+			if (!crc)
+			{
+				clunet_data_received (
+					readBuffer[CLUNET_OFFSET_SRC_ADDRESS],
+					readBuffer[CLUNET_OFFSET_DST_ADDRESS],
+					readBuffer[CLUNET_OFFSET_COMMAND],
+					readBuffer + CLUNET_OFFSET_DATA,
+					readBuffer[CLUNET_OFFSET_SIZE]
+				);
+			}
+		}
+			
+		// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
+		else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
+		{
+			bitIndex &= 7;
+			dataByte = lineFree;
+		}
+	
+		// Иначе ошибка: нехватка приемного буфера -> игнорируем пакет
+		else
+			readingState = CLUNET_READING_WAIT_INTERFRAME;
 	}
 
 	/* Проверка на битстаффинг, учитываем в следующем цикле */
