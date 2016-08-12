@@ -43,7 +43,7 @@ SOFTWARE.
 static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
-/* Global static variables (RAM: 10 bytes) */
+/* Global static variables (RAM: 7 bytes) */
 
 /* Sending process variables */
 static uint8_t sendingState = CLUNET_SENDING_IDLE; // Current sending state
@@ -181,12 +181,12 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	else
 	{
 		// Если мы будем прижимать линию, то проверим совпадение переданных и полученных бит, если различны, то конфликт на линии - останавливаем передачу и ждем
-/*		if (readingActiveBits != lastTaskBits && !(sendingState == CLUNET_SENDING_INIT && !sendingBitIndex))
+		if (recessiveTask)
 		{
 			sendingState = CLUNET_SENDING_WAIT;
 			goto _disable;
 		}
-*/
+
 		CLUNET_SEND_1;
 
 		// If data sending complete
