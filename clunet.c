@@ -188,7 +188,6 @@ _delay_1t:
 		}
 */
 		// If no conflict - disable external interrupt and pull down line
-		readingTime = CLUNET_TIMER_REG;
 		CLUNET_INT_DISABLE;
 		CLUNET_SEND_1;
 	}
@@ -230,12 +229,15 @@ _delay_1t:
 	}
 	while (numBits != 5);
 	
-	// Save dominant task
-	if (!lineFree)
-		dominantTask = numBits;
-
 	// Update OCR
 	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
+
+	// Save dominant task
+	if (!lineFree)
+	{
+		dominantTask = numBits;
+		readingTime = CLUNET_TIMER_REG;
+	}
 
 	// Bitstuff correction
 	numBits = (numBits == 5);
