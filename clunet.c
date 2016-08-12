@@ -253,8 +253,6 @@ ISR(CLUNET_INT_VECTOR)
 		uint8_t period = t12;
 		for ( ; ticks >= period; period += CLUNET_T, bitNum++);
 	}
-	else
-		readingState = CLUNET_READING_WAIT_INTERFRAME;
 
 	/* SENDING ACTIVE */
 	if (sendingState & 1)
@@ -293,6 +291,9 @@ ISR(CLUNET_INT_VECTOR)
 			return;
 		}
 	}
+	
+	if (!bitNum)
+		readingState = CLUNET_READING_WAIT_INTERFRAME;
 	
 	// Exit if in not active state
 	if (!(readingState & 1))
@@ -392,11 +393,8 @@ void
 clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, const char* data, const uint8_t size)
 {
 	/* Если размер данных в пределах буфера передачи (максимально для протокола 250 байт) */
-	if (size < (CLUNET_SEND_BUFFER_SIZE - CLUNET_OFFSET_DATA))
+	if (!sendingState && size < (CLUNET_SEND_BUFFER_SIZE - CLUNET_OFFSET_DATA))
 	{
-
-		CLUNET_DISABLE_TIMER_COMP;	// Запретим прерывание сравнения, тем самым запретим и отправку и исключим конкурентный доступ к буферу
-
 		/* Заполняем переменные */
 		sendingPriority = (prio > 8) ? 8 : prio ? : 1;
 		sendBuffer[CLUNET_OFFSET_SRC_ADDRESS] = CLUNET_DEVICE_ID;
