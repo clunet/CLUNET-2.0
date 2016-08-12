@@ -168,11 +168,20 @@ _delay_1t:
 	
 	const uint8_t lineFree = CLUNET_SENDING;
 
-	// If we need to free line - do it
+	// If we need to free line - do it and check for end data.
 	if (lineFree)
 	{
-		CLUNET_INT_ENABLE; // Enable external interrupt for collision resolving or maybe sending complete (waiting for new packet)
 		CLUNET_SEND_0;
+		// If data sending complete
+		if (bitIndex & 8)
+		{
+			CLUNET_DISABLE_TIMER_COMP;
+			sendingState = CLUNET_SENDING_IDLE;
+			// Execute sniffer callback (if exists)
+	//		if (cbDataReceivedSniff)
+	//			(*cbDataReceivedSniff)(src_address, dst_address, command, data, size);
+			return;
+		}
 	}
 
 	// If we must pull-down line.
@@ -187,22 +196,13 @@ _delay_1t:
 			goto _disable;
 		}
 */
-		// If no conflict - disable external interrupt and pull down line
-		CLUNET_INT_DISABLE;
+		// If no conflict
 		CLUNET_SEND_1;
-	}
-
-	// If sending data complete: send 1T stop-bit or finish sending process.
-	if (bitIndex & 8)
-	{
-		// If we pull down the line - send 1T stop-bit.
-		if (!lineFree)
-			goto _delay_1t;
-
-		sendingState = CLUNET_SENDING_IDLE;
-//		if (cbDataReceivedSniff)
-//			(*cbDataReceivedSniff)(src_address, dst_address, command, data, size);
-		goto _disable;
+		if (bitIndex & 8)
+		{
+			CLUNET_TIMER_REG_OCR += CLUNET_T;
+			return;
+		}
 	}
 
 	/* COLLECTING DATA BITS */
