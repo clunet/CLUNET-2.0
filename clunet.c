@@ -342,7 +342,7 @@ ISR(CLUNET_INT_VECTOR)
 			readingState = CLUNET_READING_WAIT_INTERFRAME;
 			// If CRC is correct - process incoming packet
 //			if (!crc)
-			if (!check_crc(readBuffer, byteIndex))
+			if ((sendingState & 1) || !check_crc(readBuffer, byteIndex))
 			{
 				clunet_data_received (
 					readBuffer[CLUNET_OFFSET_SRC_ADDRESS],
