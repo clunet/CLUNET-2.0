@@ -180,11 +180,12 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	// If not - this is 3-rd type of conflict. In this case we must switch to READ mode and stop sending.
 	else
 	{
-		// Если мы будем прижимать линию, то проверим совпадение переданных и полученных бит, если различны, то конфликт на линии - останавливаем передачу и ждем
+		// Check if we not been in reading ISR or first send cycle
 		if (recessiveTask)
 		{
-			sendingState = CLUNET_SENDING_WAIT;
-			goto _disable;
+			CLUNET_DISABLE_TIMER_COMP;
+			sendingState = CLUNET_SENDING_WAIT_INTERFRAME;
+			return;
 		}
 
 		CLUNET_SEND_1;
@@ -264,6 +265,8 @@ ISR(CLUNET_INT_VECTOR)
 			CLUNET_DISABLE_TIMER_COMP;
 			sendingState = CLUNET_SENDING_WAIT_INTERFRAME;
 		}
+		// Use as reading interrupt flag (reset it)
+		recessiveTask = 0;
 	}
 	else if (lineFree)
 	{
