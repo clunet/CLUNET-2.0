@@ -307,6 +307,12 @@ ISR(CLUNET_INT_VECTOR)
 		// We in this code only if someone device pull down the line before us.
 		else if (bitNum < recessiveTask)
 		{
+			bitIndex -= bitNum;
+			if (bitIndex & 0x80)
+			{
+				byteIndex--;
+				bitIndex += 8;
+			}
 			read_switch();
 			goto _reading;
 		}
