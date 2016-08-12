@@ -415,18 +415,14 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 
 		sendingLength = size + CLUNET_OFFSET_DATA + 1;
 
-		sendingState = CLUNET_SENDING_WAIT;	// Фаза ожидания линии
+		sendingState = CLUNET_SENDING_WAIT_INTERFRAME;
 
-		// Если линия свободна, то запланируем отправку
-		if (!CLUNET_READING)
+		// If ready to reading: start sending as soon as possible
+		if (!readingState)
 		{
-			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7 * CLUNET_T - 1);
 			CLUNET_ENABLE_TIMER_COMP;
+			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG;
 		}
-
-		// Все равно отпустим линию (вдруг задержки на заряд паразитной емкости линии) и процедура внешнего прерывания сама запланирует отправку
-		CLUNET_SEND_0;
-
 	}
 }
 /* Конец void clunet_send(.....) */
