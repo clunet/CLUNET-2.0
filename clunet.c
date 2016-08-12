@@ -201,6 +201,7 @@ _delay_1t:
 		if (bitIndex & 8)
 		{
 			CLUNET_TIMER_REG_OCR += CLUNET_T;
+			dominantTask = 1;
 			return;
 		}
 	}
@@ -232,13 +233,10 @@ _delay_1t:
 	// Update OCR
 	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
 
-	// Save dominant task
-	if (!lineFree)
-	{
+	if (lineFree)
+		recessiveTask = numBits;
+	else
 		dominantTask = numBits;
-		readingTime = CLUNET_TIMER_REG;
-	}
-
 	// Bitstuff correction
 	numBits = (numBits == 5);
 }
@@ -253,12 +251,13 @@ read_switch(void)
 	if (byteIndex)
 	{
 		readingPriority = sendingPriority;
-		dataByte = sendBuffer[byteIndex];
+		byteIndex--;
+		//dataByte = sendBuffer[--byteIndex];
 	}
 	else
 	{
 		readingPriority = 0;
-		dataByte = sendingPriority - 1;
+		//dataByte = sendingPriority - 1;
 	}
 }
 
@@ -274,8 +273,8 @@ ISR(CLUNET_INT_VECTOR)
 	// Многоцелевая переменная состояния линии и заполнения байт соответствующими значениями
 	const uint8_t lineFree = CLUNET_READING ? 0x00 : 0xFF;
 
-	/* Reading number of bits */
-	uint8_t bitNum = 0; // Number of bits
+	// Reading bits
+	uint8_t bitNum = 0; // Number of reading bits
 	uint8_t ticks = now - readingTime;
 	if ((ticks >= (CLUNET_T / 2)) && (ticks < (CLUNET_T * 5 + CLUNET_T / 2)))
 	{
@@ -283,6 +282,12 @@ ISR(CLUNET_INT_VECTOR)
 		for ( ; ticks >= period; period += CLUNET_T, bitNum++);
 	}
 	
+	// Update reading time value
+	if (lineFree)
+		readingTime += bitNum * CLUNET_T;
+	else
+		readingTime = now;
+
 	/* SENDING MODE */
 	if (sendingState & 1)
 	{
@@ -296,20 +301,14 @@ ISR(CLUNET_INT_VECTOR)
 				read_switch();
 				goto _reading;
 			}
-			readingTime += bitNum * CLUNET_T;
 		}
 
 		// Interrupt on falling edge (alway mean EARLY ARBITRATION, need save bitNum and switch to READ mode).
 		// We in this code only if someone device pull down the line before us.
-		else
+		else if (bitNum < recessiveTask)
 		{
-			const uint8_t delta = CLUNET_TIMER_REG_OCR - now;
-			// Conflict: switch to READ mode & stop send process.
-			if (delta >= (CLUNET_T / 2))
-			{
-				read_switch();
-				goto _reading;
-			}
+			read_switch();
+			goto _reading;
 		}
 		return;
 	}
