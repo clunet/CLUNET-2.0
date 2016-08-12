@@ -318,27 +318,11 @@ ISR(CLUNET_INT_VECTOR)
 	// Byte readed
 	if (bitIndex & 8)
 	{
-		// Readed priority
 		if (!readingPriority)
 			readingPriority = dataByte + 1;
 		else
-		{
 			readBuffer[byteIndex++] = dataByte;
 
-			/* Update Maxim iButton 8-bit CRC with received byte */
-/*			uint8_t b = 8;
-			uint8_t inbyte = dataByte;
-			do
-			{
-				uint8_t mix = crc ^ inbyte;
-				crc >>= 1;
-				if (mix & 1)
-					crc ^= 0x8C;
-				inbyte >>= 1;
-			}
-			while (--b);
-*/		}
-		
 		// Whole packet readed
 		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
 		{
@@ -374,7 +358,7 @@ ISR(CLUNET_INT_VECTOR)
 /* End of ISR(CLUNET_INT_VECTOR) */
 
 void
-clunet_init()
+clunet_init(void)
 {
 	sendingLength = MCUSR; // Используем переменную sendingLength для отправки содержимого регистра MCUSR
 	MCUSR = 0;
@@ -418,23 +402,29 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 
 		sendingLength = size + CLUNET_OFFSET_DATA + 1;
 
-		sendingState = CLUNET_SENDING_WAIT_INTERFRAME;
-
-		// If ready to reading: start sending as soon as possible
-		if (!readingState)
-		{
-			CLUNET_ENABLE_TIMER_COMP;
-			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG;
-		}
+		clunet_resend_last_packet();
 	}
 }
 /* Конец void clunet_send(.....) */
 
 /* Возвращает 0, если готов к передаче, иначе приоритет текущей задачи */
 uint8_t
-clunet_ready_to_send()
+clunet_ready_to_send(void)
 {
 	return sendingState ? sendingPriority : 0;
+}
+
+void
+clunet_resend_last_packet(void)
+{
+	sendingState = CLUNET_SENDING_WAIT_INTERFRAME;
+
+	// If ready to reading: start sending as soon as possible
+	if (!readingState)
+	{
+		CLUNET_ENABLE_TIMER_COMP;
+		CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG;
+	}
 }
 
 void
