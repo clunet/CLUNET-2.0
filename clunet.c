@@ -143,23 +143,19 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	{
 		// Reset reading state
 		readingState = CLUNET_READING_IDLE;
-
 		// If in IDLE state: disable timer output compare interrupt
 		if (!sendingState)
 		{
-_disable:
 			CLUNET_DISABLE_TIMER_COMP;
 			return;
 		}
-
 		// If in WAIT_INTERFRAME state: starting sending throuth 1Т
-		sendingState = CLUNET_SENDING_ACTIVE;
+		sendingState = CLUNET_SENDING_ACTIVE; // Set sending process to ACTIVE state
 		dataByte = sendingPriority - 1; // First need send priority (3 bits)
-		bitIndex = 5; // Priority bits position
 		byteIndex = 0; // Data index
-		recessiveTask = 0; // Reset recessive task
+		bitIndex = 5; // Priority bits position
 		numBits = 1; // Start bit
-_delay_1t:
+		recessiveTask = 0; // Reset recessive task
 		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
 		return;
 	}
@@ -175,10 +171,6 @@ _delay_1t:
 		{
 			CLUNET_DISABLE_TIMER_COMP;
 			sendingState = CLUNET_SENDING_IDLE;
-
-			// Execute sniffer callback (if exists)
-	//		if (cbDataReceivedSniff)
-	//			(*cbDataReceivedSniff)(src_address, dst_address, command, data, size);
 			return;
 		}
 	}
@@ -195,7 +187,6 @@ _delay_1t:
 			goto _disable;
 		}
 */
-		// If no conflict
 		CLUNET_SEND_1;
 
 		// If data sending complete
@@ -301,10 +292,9 @@ ISR(CLUNET_INT_VECTOR)
 		}
 	}
 	
+	// Exit if in not active state
 	if (!(readingState & 1))
 		return;
-	
-	bitNum -= bitStuff; // Bitstuff correction
 	
 	// Если линия освободилась, значит была единичная посылка - установим соответствующие биты
 	if (lineFree)
@@ -314,9 +304,10 @@ ISR(CLUNET_INT_VECTOR)
 	else
 		dataByte &= ~(0xFF >> bitIndex);
 
-	// Обновим битовый индекс с учетом битстаффинга
-	bitIndex += bitNum;
+	// Update bit index with bitstuff correction
+	bitIndex += bitNum - bitStuff;
 
+	// Byte readed
 	if (bitIndex & 8)
 	{
 		// Readed priority
@@ -339,8 +330,8 @@ ISR(CLUNET_INT_VECTOR)
 			}
 			while (--b);
 		}
-			
-		// Если пакет прочитан полностью, то проверим контрольную сумму
+		
+		// Whole packet readed
 		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
 		{
 			readingState = CLUNET_READING_WAIT_INTERFRAME;
@@ -356,14 +347,14 @@ ISR(CLUNET_INT_VECTOR)
 				);
 			}
 		}
-			
+		
 		// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
 		else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
 		{
 			bitIndex &= 7;
 			dataByte = lineFree;
 		}
-	
+		
 		// Иначе ошибка: нехватка приемного буфера -> игнорируем пакет
 		else
 			readingState = CLUNET_READING_WAIT_INTERFRAME;
