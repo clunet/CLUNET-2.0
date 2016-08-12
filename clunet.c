@@ -213,8 +213,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 				// If data complete: exit and send this last bits
 				if (byteIndex == sendingLength)
 					break;
-				dataByte = readBuffer[byteIndex] = sendBuffer[byteIndex];
-				byteIndex++;
+				dataByte = sendBuffer[byteIndex++];
 				bitIndex = 0;
 			}
 		}
