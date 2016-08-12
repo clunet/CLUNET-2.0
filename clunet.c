@@ -290,8 +290,20 @@ ISR(CLUNET_INT_VECTOR)
 			// If number of reading dominant bits greater than we sended:
 			if (bitNum > dominantTask)
 			{
+				CLUNET_DISABLE_TIMER_COMP;
+				sendingState = CLUNET_SENDING_WAIT;
+				readingState = CLUNET_READING_ACTIVE;
+
 				bitNum -= dominantTask;
-				read_switch();
+
+				if (byteIndex)
+				{
+					readingPriority = sendingPriority;
+					byteIndex--;
+				}
+				else
+					readingPriority = 0;
+
 				goto _reading;
 			}
 		}
@@ -300,19 +312,34 @@ ISR(CLUNET_INT_VECTOR)
 		// We in this code only if someone device pull down the line before us.
 		else if (bitNum < recessiveTask)
 		{
+
+			CLUNET_DISABLE_TIMER_COMP;
+			sendingState = CLUNET_SENDING_WAIT;
+			readingState = CLUNET_READING_ACTIVE;
+
 			bitIndex -= bitNum;
 			if (bitIndex & 0x80)
 			{
 				bitIndex += 8;
 				if (--byteIndex)
 				{
-					dataByte = sendBuffer[byteIndex];
-					
+					readingPriority = sendingPriority;
+					dataByte = sendBuffer[byteIndex--];
 				}
 				else
+				{
+					readingPriority = 0;
 					dataByte = sendingPriority - 1;
+				}
 			}
-			read_switch();
+			else if (byteIndex)
+			{
+				readingPriority = sendingPriority;
+				byteIndex--;
+			}
+			else
+				readingPriority = 0;
+
 			goto _reading;
 		}
 		return;
