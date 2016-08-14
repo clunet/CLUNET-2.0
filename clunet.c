@@ -35,6 +35,13 @@ SOFTWARE.
 #define ACTIVE 1
 #define WAIT_INTERFRAME 2
 
+#define RECEIVED_SRC_ADDRESS readBuffer[CLUNET_OFFSET_SRC_ADDRESS]
+#define RECEIVED_DST_ADDRESS readBuffer[CLUNET_OFFSET_DST_ADDRESS]
+#define RECEIVED_COMMAND readBuffer[CLUNET_OFFSET_COMMAND]
+#define RECEIVED_DATA_PTR readBuffer + CLUNET_OFFSET_DATA
+#define RECEIVED_DATA_SIZE readBuffer[CLUNET_OFFSET_SIZE]
+
+
 /* Pointers to the callback functions on receiving packet (must be short as possible) */
 static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
@@ -80,12 +87,18 @@ check_crc(const char* data, const uint8_t size)
 	return crc;
 }
 
-/* Inline function for process receiving packet */
-static inline void
-clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const uint8_t command, char* data, const uint8_t size)
+/* Function for process receiving packet */
+static void
+process_received_packet(void)
 {
+	const uint8_t src_address = RECEIVED_SRC_ADDRESS;
+	const uint8_t dst_address = RECEIVED_DST_ADDRESS;
+	const uint8_t command = RECEIVED_COMMAND;
+	const char* data_ptr = RECEIVED_DATA_PTR;
+	const uint8_t data_size = RECEIVED_DATA_SIZE;
+
 	if (cbDataReceivedSniff)
-		(*cbDataReceivedSniff)(src_address, dst_address, command, data, size);
+		(*cbDataReceivedSniff)(src_address, dst_address, command, data_ptr, data_size);
 
 	if ((src_address != CLUNET_DEVICE_ID) && ((dst_address == CLUNET_DEVICE_ID) || (dst_address == CLUNET_BROADCAST_ADDRESS)))
 	{
@@ -113,12 +126,12 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 				/* Answer for ping */
 				case CLUNET_COMMAND_PING:
 	
-					clunet_send(src_address, CLUNET_PRIORITY_COMMAND, CLUNET_COMMAND_PING_REPLY, data, size);
+					clunet_send(src_address, CLUNET_PRIORITY_COMMAND, CLUNET_COMMAND_PING_REPLY, data_ptr, data_size);
 					return;
 			}
 		}
 		if (cbDataReceived)
-			(*cbDataReceived)(src_address, command, data, size);
+			(*cbDataReceived)(src_address, command, data_ptr, data_size);
 	}
 }
 
@@ -319,15 +332,7 @@ ISR(CLUNET_INT_VECTOR)
 			readingState = WAIT_INTERFRAME;
 			// Check CRC only if we not sending (save CPU time)
 			if (!recessiveTask || !check_crc(readBuffer, byteIndex))
-			{
-				clunet_data_received (
-					readBuffer[CLUNET_OFFSET_SRC_ADDRESS],
-					readBuffer[CLUNET_OFFSET_DST_ADDRESS],
-					readBuffer[CLUNET_OFFSET_COMMAND],
-					readBuffer + CLUNET_OFFSET_DATA,
-					readBuffer[CLUNET_OFFSET_SIZE]
-				);
-			}
+				process_received_packet();
 		}
 		
 		// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
