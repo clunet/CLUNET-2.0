@@ -47,8 +47,8 @@ static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, 
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
 /* Global static variables (RAM: 7 bytes) */
-static uint8_t readingState = CLUNET_READING_IDLE; // Current reading state
-static uint8_t sendingState = CLUNET_SENDING_IDLE; // Current sending state
+static uint8_t readingState = IDLE; // Current reading state
+static uint8_t sendingState = IDLE; // Current sending state
 static uint8_t readingPriority; // Receiving packet priority
 static uint8_t sendingPriority; // Sending priority (1 to 8)
 static uint8_t sendingLength; // Sending data length
@@ -94,8 +94,8 @@ process_received_packet(void)
 	const uint8_t src_address = RECEIVED_SRC_ADDRESS;
 	const uint8_t dst_address = RECEIVED_DST_ADDRESS;
 	const uint8_t command = RECEIVED_COMMAND;
-	const char* data_ptr = RECEIVED_DATA_PTR;
 	const uint8_t data_size = RECEIVED_DATA_SIZE;
+	char* data_ptr = RECEIVED_DATA_PTR;
 
 	if (cbDataReceivedSniff)
 		(*cbDataReceivedSniff)(src_address, dst_address, command, data_ptr, data_size);
