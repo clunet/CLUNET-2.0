@@ -109,7 +109,7 @@ process_received_packet(void)
 			while (1);
 		}
 
-		if ((sendingState == CLUNET_SENDING_IDLE) || (sendingPriority <= CLUNET_PRIORITY_MESSAGE))
+		if (!sendingState || (sendingPriority <= CLUNET_PRIORITY_MESSAGE))
 		{
 			switch (command)
 			{
