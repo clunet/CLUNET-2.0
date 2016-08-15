@@ -148,11 +148,13 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		// If we must PROCESS received packet: 
 		if (readingState & STATE_PROCESS)
 		{
+			CLUNET_DISABLE_INT;
 			CLUNET_SEND_1;
 			if (!recessiveTask || !check_crc(readBuffer, RECEIVED_DATA_SIZE + CLUNET_OFFSET_DATA + 1))
 				process_received_packet();
-			CLUNET_SEND_0;
 			readingState = STATE_WAIT_INTERFRAME;
+			CLUNET_ENABLE_INT;
+			CLUNET_SEND_0;
 			return;
 		}
 		// Reset reading state
