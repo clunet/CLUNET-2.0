@@ -145,18 +145,6 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	// If in NOT ACTIVE state
 	if (!(sendingState & STATE_ACTIVE))
 	{
-		// If we must PROCESS received packet: 
-		if (readingState & STATE_PROCESS)
-		{
-			CLUNET_DISABLE_INT;
-			CLUNET_SEND_1;
-			if (!recessiveTask || !check_crc(readBuffer, RECEIVED_DATA_SIZE + CLUNET_OFFSET_DATA + 1))
-				process_received_packet();
-			readingState = STATE_WAIT_INTERFRAME;
-			CLUNET_ENABLE_INT;
-			CLUNET_SEND_0;
-			return;
-		}
 		// Reset reading state
 		readingState = STATE_IDLE;
 		// If in IDLE state: disable timer output compare interrupt
@@ -347,26 +335,10 @@ _wait_interframe:
 		// Whole packet readed
 		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > RECEIVED_DATA_SIZE + CLUNET_OFFSET_DATA))
 		{
-			readingState = STATE_WAIT_INTERFRAME;
-			// Line is free
-			if (lineFree)
-			{
-				CLUNET_DISABLE_INT;
-				readingState = STATE_PROCESS;
-				CLUNET_TIMER_REG_OCR = now + CLUNET_T;
-				CLUNET_ENABLE_TIMER_COMP;
-			}
 			// Packet from another device, line is busy
-			else if (recessiveTask)
-			{
-				CLUNET_SEND_1;
-				if (!check_crc(readBuffer, byteIndex))
-					process_received_packet();
-				CLUNET_SEND_0;
-			}
-			// Packet from us, line is busy
-			else
+			if (/*!recessiveTask ||*/ !check_crc(readBuffer, byteIndex))
 				process_received_packet();
+			readingState = STATE_WAIT_INTERFRAME;
 		}
 		
 		// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
