@@ -343,9 +343,59 @@ ISR(CLUNET_INT_VECTOR)
 		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
 		{
 			readingState = STATE_WAIT_INTERFRAME;
+			// Line is free
+			if (lineFree)
+			{
+				CLUNET_DISABLE_INT;
+				readingState = STATE_PROCESS;
+				CLUNET_TIMER_REG_OCR = now + CLUNET_T;
+				CLUNET_ENABLE_TIMER_COMP;
+			}
+			// Packet from another device, line is busy
+			else if (recessiveTask)
+			{
+				CLUNET_SEND_1;
+				if (!check_crc(readBuffer, byteIndex))
+					process_received_packet();
+				CLUNET_SEND_0;
+			}
+			// Packet from us, line is busy
+			else
+				process_received_packet();
+
+
+
+			// If packet from another device
+			if (recessiveTask)
+			{
+				if (lineFree)
+				{
+					readingState = STATE_PROCESS;
+					CLUNET_DISABLE_INT;
+					CLUNET_TIMER_REG_OCR = now + CLUNET_T;
+					CLUNET_ENABLE_TIMER_COMP;
+				}
+				else
+				{
+					CLUNET_SEND_1;
+					if (!check_crc(readBuffer, byteIndex))
+						process_received_packet();
+					CLUNET_SEND_0;
+				}
+			}
+			// If packet from us and line is free
+			else if (lineFree)
+			{
+				readingState = STATE_PROCESS;
+				CLUNET_DISABLE_INT;
+				CLUNET_TIMER_REG_OCR = now + CLUNET_T;
+				CLUNET_ENABLE_TIMER_COMP;
+			}
+			else
 			// Check CRC only if we not sending (save CPU time)
 			if (!recessiveTask || !check_crc(readBuffer, byteIndex))
 				process_received_packet();
+			CLUNET_DISABLE_INT;
 		}
 		
 		// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
