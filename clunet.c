@@ -251,7 +251,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 }
 /* End of ISR(CLUNET_TIMER_COMP_VECTOR) */
 
-/* External interrupt service routine (RAM: 2 bytes) */
+/* External interrupt service routine (RAM: 6 bytes) */
 ISR(CLUNET_INT_VECTOR)
 {
 	// Static variables (RAM: 6 bytes)
@@ -275,7 +275,7 @@ ISR(CLUNET_INT_VECTOR)
 		}
 	}
 
-	// SENDING ACTIVE
+	// If sending is active
 	if (sendingState & STATE_ACTIVE)
 	{
 		// Check for conflict on the line
@@ -284,28 +284,28 @@ ISR(CLUNET_INT_VECTOR)
 			sendingState = recessiveTask = STATE_WAIT_INTERFRAME;
 			goto _wait_interframe;
 		}
-		recessiveTask = 0; // Use as reading interrupt flag (reset it)
+		recessiveTask = 0; // Used as reading interrupt flag
 	}
-	// SENDING NOT ACTIVE
+	// If sending not active
 	else
 	{
 _wait_interframe:
-		// SENDING NOT ACTIVE AND LINE IS FREE
+		// If line is pull-up
 		if (lineFree)
 		{
 			CLUNET_TIMER_REG_OCR = now + (7 * CLUNET_T - 1);
 			CLUNET_ENABLE_TIMER_COMP;
 		}
-		// SENDING NOT ACTIVE AND LINE IS BUSY
+		// If line is pull-down
 		else
 			CLUNET_DISABLE_TIMER_COMP;
 	}
 
-	// If line is pull-down
+	// On falling edge
 	if (!lineFree)
 	{
 		lastTime = now; // Update time value
-		// If reading in IDLE state
+		// If reading in IDLE state - start reading process
 		if (!readingState)
 		{
 			dataByte = readingPriority = byteIndex = crc = 0;
@@ -316,6 +316,7 @@ _wait_interframe:
 		}
 	}
 
+	// On error reading bits
 	if (!bitNum)
 		readingState = STATE_WAIT_INTERFRAME;
 
@@ -335,7 +336,7 @@ _wait_interframe:
 	// Update bit index with bitstuff correction
 	bitIndex += bitNum - bitStuff;
 
-	// Byte readed
+	// Whole byte readed
 	if (bitIndex & 8)
 	{
 		if (readingPriority)
@@ -366,40 +367,6 @@ _wait_interframe:
 			// Packet from us, line is busy
 			else
 				process_received_packet();
-
-
-
-			// If packet from another device
-			if (recessiveTask)
-			{
-				if (lineFree)
-				{
-					readingState = STATE_PROCESS;
-					CLUNET_DISABLE_INT;
-					CLUNET_TIMER_REG_OCR = now + CLUNET_T;
-					CLUNET_ENABLE_TIMER_COMP;
-				}
-				else
-				{
-					CLUNET_SEND_1;
-					if (!check_crc(readBuffer, byteIndex))
-						process_received_packet();
-					CLUNET_SEND_0;
-				}
-			}
-			// If packet from us and line is free
-			else if (lineFree)
-			{
-				readingState = STATE_PROCESS;
-				CLUNET_DISABLE_INT;
-				CLUNET_TIMER_REG_OCR = now + CLUNET_T;
-				CLUNET_ENABLE_TIMER_COMP;
-			}
-			else
-			// Check CRC only if we not sending (save CPU time)
-			if (!recessiveTask || !check_crc(readBuffer, byteIndex))
-				process_received_packet();
-			CLUNET_DISABLE_INT;
 		}
 		
 		// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
