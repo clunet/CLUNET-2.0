@@ -256,48 +256,55 @@ ISR(CLUNET_INT_VECTOR)
 {
 	// Static variables (RAM: 6 bytes)
 	static uint8_t dataByte, byteIndex, bitIndex, bitStuff, lastTime, crc;
-
+	
 	const uint8_t now = CLUNET_TIMER_REG;
 	const uint8_t lineFree = CLUNET_READING ? 0x00 : 0xFF;
-	const uint8_t ticks = now - lastTime;
-
-	// Reading bits
 	uint8_t bitNum = 0; // Number of reading bits
-	const uint8_t t12 = CLUNET_T / 2;
-	if ((ticks >= t12) && (ticks < (5 * CLUNET_T + t12)))
+
+	if ((readingState & STATE_ACTIVE) || (sendingState & STATE_ACTIVE))
 	{
-		uint8_t period = t12;
-		for ( ; ticks >= period; period += CLUNET_T, bitNum++);
+		// Reading bits
+		const uint8_t ticks = now - lastTime;
+		const uint8_t t12 = CLUNET_T / 2;
+		if ((ticks >= t12) && (ticks < (5 * CLUNET_T + t12)))
+		{
+			uint8_t period = t12;
+			for ( ; ticks >= period; period += CLUNET_T, bitNum++);
+			if (lineFree)
+				lastTime += bitNum * CLUNET_T;
+		}
 	}
 
-	/* SENDING ACTIVE */
+	// SENDING ACTIVE
 	if (sendingState & STATE_ACTIVE)
 	{
+		// Check for conflict on the line
 		if ((lineFree && (bitNum > dominantTask)) || (!lineFree && (bitNum < recessiveTask)))
 		{
-			CLUNET_DISABLE_TIMER_COMP;
-			sendingState = STATE_WAIT_INTERFRAME;
-			recessiveTask = 1; // Become CRC check flag.
+			sendingState = recessiveTask = STATE_WAIT_INTERFRAME;
+			goto _wait_interframe;
 		}
 		// Use as reading interrupt flag (reset it)
 		else
 			recessiveTask = 0;
 	}
-	else if (lineFree)
-	{
-		// Planning reset reading state and start sending if in waiting state
-		CLUNET_TIMER_REG_OCR = now + (7 * CLUNET_T - 1);
-		CLUNET_ENABLE_TIMER_COMP;
-	}
+	// SENDING NOT ACTIVE
 	else
 	{
-		CLUNET_DISABLE_TIMER_COMP;
+_wait_interframe:
+		// SENDING NOT ACTIVE AND LINE IS FREE
+		if (lineFree)
+		{
+			CLUNET_TIMER_REG_OCR = now + (7 * CLUNET_T - 1);
+			CLUNET_ENABLE_TIMER_COMP;
+		}
+		// SENDING NOT ACTIVE AND LINE IS BUSY
+		else
+			CLUNET_DISABLE_TIMER_COMP;
 	}
-	
+
 	// Update reading time value
-	if (lineFree)
-		lastTime += bitNum * CLUNET_T;
-	else
+	if (!lineFree)
 	{
 		lastTime = now;
 		if (!readingState)
@@ -310,14 +317,18 @@ ISR(CLUNET_INT_VECTOR)
 			return;
 		}
 	}
-	
+
+
 	if (!bitNum)
 		readingState = STATE_WAIT_INTERFRAME;
-	
-	// Exit if in not active state
-	if (!(readingState & STATE_ACTIVE))
+
+	// Exit if reading in WAIT_INTERFRAME state
+	if (readingState & STATE_WAIT_INTERFRAME)
 		return;
-	
+
+
+
+
 	const uint8_t mask = (0xFF >> bitIndex);
 	
 	// Если линия освободилась, значит была единичная посылка - установим соответствующие биты
@@ -334,10 +345,10 @@ ISR(CLUNET_INT_VECTOR)
 	// Byte readed
 	if (bitIndex & 8)
 	{
-		if (!readingPriority)
-			readingPriority = dataByte + 1;
-		else
+		if (readingPriority)
 			readBuffer[byteIndex++] = dataByte;
+		else
+			readingPriority = dataByte + 1;
 
 		// Whole packet readed
 		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
