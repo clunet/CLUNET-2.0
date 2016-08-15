@@ -258,7 +258,7 @@ ISR(CLUNET_INT_VECTOR)
 	static uint8_t dataByte, byteIndex, bitIndex, bitStuff, lastTime, crc;
 	
 	const uint8_t now = CLUNET_TIMER_REG;
-	const uint8_t lineFree = CLUNET_READING ? 0x00 : 0xFF;
+	const uint8_t lineFree = CLUNET_READING ? 0 : 255;
 	uint8_t bitNum = 0; // Number of reading bits
 
 	if ((readingState & STATE_ACTIVE) || (sendingState & STATE_ACTIVE))
@@ -284,9 +284,7 @@ ISR(CLUNET_INT_VECTOR)
 			sendingState = recessiveTask = STATE_WAIT_INTERFRAME;
 			goto _wait_interframe;
 		}
-		// Use as reading interrupt flag (reset it)
-		else
-			recessiveTask = 0;
+		recessiveTask = 0; // Use as reading interrupt flag (reset it)
 	}
 	// SENDING NOT ACTIVE
 	else
@@ -303,38 +301,33 @@ _wait_interframe:
 			CLUNET_DISABLE_TIMER_COMP;
 	}
 
-	// Update reading time value
+	// If line is pull-down
 	if (!lineFree)
 	{
-		lastTime = now;
+		lastTime = now; // Update time value
+		// If reading in IDLE state
 		if (!readingState)
 		{
-			readingState = STATE_ACTIVE;
 			dataByte = readingPriority = byteIndex = crc = 0;
+			recessiveTask = bitStuff = 1;
+			readingState = STATE_ACTIVE;
 			bitIndex = 5;
-			bitStuff = 1;
-			recessiveTask = 1;
 			return;
 		}
 	}
 
-
 	if (!bitNum)
 		readingState = STATE_WAIT_INTERFRAME;
 
-	// Exit if reading in WAIT_INTERFRAME state
-	if (readingState & STATE_WAIT_INTERFRAME)
+	// Exit if reading is NOT ACTIVE
+	if (!(readingState & STATE_ACTIVE))
 		return;
 
-
-
-
 	const uint8_t mask = (0xFF >> bitIndex);
-	
+
 	// Если линия освободилась, значит была единичная посылка - установим соответствующие биты
 	if (lineFree)
 		dataByte |= mask;
-
 	// Если линия прижалась, значит была нулевая посылка - сбросим соответствующие биты
 	else
 		dataByte &= ~mask;
@@ -351,7 +344,7 @@ _wait_interframe:
 			readingPriority = dataByte + 1;
 
 		// Whole packet readed
-		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
+		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > RECEIVED_DATA_SIZE + CLUNET_OFFSET_DATA))
 		{
 			readingState = STATE_WAIT_INTERFRAME;
 			// Line is free
