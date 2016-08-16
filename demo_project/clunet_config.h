@@ -18,8 +18,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *****************************************************************************************/
 
-#ifndef __CLUNET_CONFIG_H_INCLUDED__
-#define __CLUNET_CONFIG_H_INCLUDED__
+#ifndef __CLUNET_CONFIG_H__
+#define __CLUNET_CONFIG_H__
 
 /* CONFIGURE YOUR DEVICE HERE */
 

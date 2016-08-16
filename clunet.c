@@ -31,26 +31,49 @@ SOFTWARE.
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 
-/* Указатели на функции обратного вызова при получении пакетов (должны быть как можно короче) (ОЗУ: 4 байта при МК с 16-битной адресацией) */
+#define STATE_IDLE 0
+#define STATE_ACTIVE 1
+#define STATE_WAIT_INTERFRAME 2
+#define STATE_PROCESS 4
+
+#define RECEIVED_SRC_ADDRESS (uint8_t)readBuffer[CLUNET_OFFSET_SRC_ADDRESS]
+#define RECEIVED_DST_ADDRESS (uint8_t)readBuffer[CLUNET_OFFSET_DST_ADDRESS]
+#define RECEIVED_COMMAND (uint8_t)readBuffer[CLUNET_OFFSET_COMMAND]
+#define RECEIVED_DATA_PTR readBuffer + CLUNET_OFFSET_DATA
+#define RECEIVED_DATA_SIZE (uint8_t)readBuffer[CLUNET_OFFSET_SIZE]
+
+
+/* Pointers to the callback functions on receiving packet (must be short as possible) */
 static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
+<<<<<<< HEAD
 /* Глобальные статические переменные (ОЗУ: 5 байт) */
 static uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
 static uint8_t sendingLength; // Длина данных для отправки вместе с заголовком кадра
 static uint8_t sendingPriority; // Приоритет отправляемого пакета (от 1 до 8)
 static uint8_t readingState = CLUNET_READING_IDLE; // Состояние чтения
 static uint8_t readingActiveBits; // Количество активных прочитанных бит
+=======
+/* Global static variables (RAM: 7 bytes) */
+static uint8_t readingState = STATE_IDLE; // Current reading state
+static uint8_t sendingState = STATE_IDLE; // Current sending state
+static uint8_t readingPriority; // Receiving packet priority
+static uint8_t sendingPriority; // Sending priority (1 to 8)
+static uint8_t sendingLength; // Sending data length
+static uint8_t dominantTask; // Dominant task (bits)
+static uint8_t recessiveTask; // Recessive task (bits)
+>>>>>>> refs/remotes/origin/test
 
-/* Буферы данных */
-static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Буфер передачи
-static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Буфер чтения
+/* Data buffers */
+static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Sending data buffer
+static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Reading data buffer
 
 #ifdef CLUNET_DEVICE_NAME
- static const char devName[] = CLUNET_DEVICE_NAME; // Имя устройства если задано (простое лаконичное)
+ static const char devName[] = CLUNET_DEVICE_NAME; // Simple and short device name
 #endif
 
-/* Функция нахождения контрольной суммы Maxim iButton 8-bit */
+/* Function for calculate Maxim iButton 8-bit checksum */
 static char
 check_crc(const char* data, const uint8_t size)
 {
@@ -74,12 +97,18 @@ check_crc(const char* data, const uint8_t size)
 	return crc;
 }
 
-/* Встраиваемая функция обработки входящего пакета */
-static inline void
-clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const uint8_t command, char* data, const uint8_t size)
+/* Function for process receiving packet */
+static void
+process_received_packet(void)
 {
+	const uint8_t src_address = RECEIVED_SRC_ADDRESS;
+	const uint8_t dst_address = RECEIVED_DST_ADDRESS;
+	const uint8_t command = RECEIVED_COMMAND;
+	const uint8_t data_size = RECEIVED_DATA_SIZE;
+	char* data_ptr = RECEIVED_DATA_PTR;
+
 	if (cbDataReceivedSniff)
-		(*cbDataReceivedSniff)(src_address, dst_address, command, data, size);
+		(*cbDataReceivedSniff)(src_address, dst_address, command, data_ptr, data_size);
 
 	if ((src_address != CLUNET_DEVICE_ID) && ((dst_address == CLUNET_DEVICE_ID) || (dst_address == CLUNET_BROADCAST_ADDRESS)))
 	{
@@ -90,11 +119,11 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 			while (1);
 		}
 
-		if ((sendingState == CLUNET_SENDING_IDLE) || (sendingPriority <= CLUNET_PRIORITY_MESSAGE))
+		if (!sendingState || (sendingPriority <= CLUNET_PRIORITY_MESSAGE))
 		{
 			switch (command)
 			{
-				/* Ответ на поиск устройств */
+				/* Answer for discovery command */
 				case CLUNET_COMMAND_DISCOVERY:
 	
 					#ifdef CLUNET_DEVICE_NAME
@@ -104,68 +133,67 @@ clunet_data_received(const uint8_t src_address, const uint8_t dst_address, const
 					#endif
 					return;
 	
-				/* Ответ на пинг */
+				/* Answer for ping */
 				case CLUNET_COMMAND_PING:
 	
-					clunet_send(src_address, CLUNET_PRIORITY_COMMAND, CLUNET_COMMAND_PING_REPLY, data, size);
+					clunet_send(src_address, CLUNET_PRIORITY_COMMAND, CLUNET_COMMAND_PING_REPLY, data_ptr, data_size);
 					return;
 			}
 		}
 		if (cbDataReceived)
-			(*cbDataReceived)(src_address, command, data, size);
+			(*cbDataReceived)(src_address, command, data_ptr, data_size);
 	}
 }
 
-/* Процедура прерывания сравнения таймера (ОЗУ: 4 байта) */
+/* Timer output compare interrupt service routine (RAM: 4 bytes) */
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
-	static uint8_t bitIndex, byteIndex, bitStuff, lastActiveBits; // Статические переменные в ОЗУ (4 байт)
-
-	switch (sendingState)
+	// Static variables
+	static uint8_t dataByte, byteIndex, bitIndex, numBits;
+	
+	// If in NOT ACTIVE state
+	if (!(sendingState & STATE_ACTIVE))
 	{
-		// Если передатчик освободился, сбросим статус чтения и пока сюда не планируем возвращаться
-		case CLUNET_SENDING_IDLE:
-
-			readingState = CLUNET_READING_IDLE;
-_disable:
+		// Reset reading state
+		readingState = STATE_IDLE;
+		// If in IDLE state: disable timer output compare interrupt
+		if (!sendingState)
+		{
 			CLUNET_DISABLE_TIMER_COMP;
 			return;
-
-		// Если мы в ожидании освобождения линии, то начнем передачу через 1Т, предварительно сбросив статус чтения
-		case CLUNET_SENDING_WAIT:
-
-			readingState = CLUNET_READING_IDLE;
-			sendingState = CLUNET_SENDING_INIT;
-			byteIndex = bitIndex = 0;
-			bitStuff = 1;
-_delay_1t:
-			CLUNET_TIMER_REG_OCR += CLUNET_T;
-			return;
-
+		}
+		// If in WAIT_INTERFRAME state: starting sending throuth 1Т
+		sendingState = STATE_ACTIVE; // Set sending process to ACTIVE state
+		dataByte = sendingPriority - 1; // First need send priority (3 bits)
+		byteIndex = 0; // Data index
+		bitIndex = 5; // Priority bits position
+		numBits = 1; // Start bit
+		recessiveTask = 0; // Reset recessive task
+		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
+		return;
 	}
 	
-	// Многоцелевая переменная-маска состояния линии и чтения бит данных
-	const uint8_t lineFree = CLUNET_SENDING ? 0x80 : 0x00;
+	const uint8_t lineFree = CLUNET_SENDING;
 
-	// Если мы должны освободить линию - сделаем это
+	// If we need to free line - do it and check for end data.
 	if (lineFree)
-		CLUNET_SEND_0;
-	// Если мы должны прижать линию
-	else
 	{
-		// Если мы будем прижимать линию, то проверим совпадение переданных и полученных бит, если различны, то конфликт на линии - останавливаем передачу и ждем
-		if (readingActiveBits != lastActiveBits && !(sendingState == CLUNET_SENDING_INIT && !bitIndex))
+		CLUNET_SEND_0;
+		// If data sending complete
+		if (bitIndex & 8)
 		{
-			sendingState = CLUNET_SENDING_WAIT;
-			goto _disable;
+			CLUNET_DISABLE_TIMER_COMP;
+			sendingState = STATE_IDLE;
+			return;
 		}
-		// Конфликта нет, можем смело прижимать линию
-		CLUNET_SEND_1;
 	}
 
-	// Фаза завершения передачи кадра и генерации стопового бита при необходимости
-	if (sendingState == CLUNET_SENDING_STOP)
+	// If we must pull-down line.
+	// In reading ISR we resolve post- & pre- arbitration. In this code we must check that read ISR has been executed.
+	// If not - this is 3-rd type of conflict. In this case we must switch to READ mode and stop sending.
+	else
 	{
+<<<<<<< HEAD
 		// Если линию заняли, то сделаем короткий стоповый импульс длительностью 1Т
 		if (!lineFree)
 			goto _delay_1t;
@@ -175,13 +203,31 @@ _delay_1t:
 		goto _disable;
 
 	}
+=======
+		// Check if we not been in reading ISR or first send cycle
+		if (recessiveTask)
+		{
+			CLUNET_DISABLE_TIMER_COMP;
+			sendingState = STATE_WAIT_INTERFRAME;
+			return;
+		}
 
-	// Количество бит для передачи
-	uint8_t numBits = bitStuff;
+		CLUNET_SEND_1;
+>>>>>>> refs/remotes/origin/test
 
-	// Смотрим фазу передачи
-	switch (sendingState)
+		// If data sending complete
+		if (bitIndex & 8)
+		{
+			CLUNET_TIMER_REG_OCR += CLUNET_T;
+			dominantTask = 1;
+			return;
+		}
+	}
+
+	/* COLLECTING DATA BITS */
+	do
 	{
+<<<<<<< HEAD
 		// Главная фаза передачи данных
 		case CLUNET_SENDING_DATA:
 _send_data:
@@ -214,148 +260,134 @@ _send_data:
 
 		// Фаза отправки заголовка кадра
 		case CLUNET_SENDING_INIT:
+=======
+		const uint8_t bitValue = dataByte & (0x80 >> bitIndex);
+		if ((lineFree && !bitValue) || (!lineFree && bitValue))
+>>>>>>> refs/remotes/origin/test
 		{
-			uint8_t priority = (sendingPriority - 1) << 5;
+			numBits++;
 
-			while (((priority << bitIndex) & 0x80) ^ lineFree)
+			// If sending byte complete: reset bit index and get next byte to send
+			if (++bitIndex & 8)
 			{
-				numBits++;
-				/* Если отправлены все биты приоритета */
-				if (++bitIndex == 3)
-				{
-					bitIndex = 0;
-					sendingState = CLUNET_SENDING_DATA;
-					goto _send_data; // Уходим в часть кода, занимающейся отправкой данных
-				}
+				// If data complete: exit and send this last bits
+				if (byteIndex == sendingLength)
+					break;
+				dataByte = sendBuffer[byteIndex++];
+				bitIndex = 0;
 			}
 		}
+		else
+			break;
 	}
-
-	// Сохраним сколько доминантных бит мы должны передать (на сколько периодов прижать линию)
-	if (!lineFree)
-		lastActiveBits = numBits;
-
+	while (numBits != 5);
+	
+	// Update OCR
 	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
 
-	bitStuff = (numBits == 5);
+	if (lineFree)
+		recessiveTask = numBits;
+	else
+		dominantTask = numBits;
 
+	// Bitstuff correction
+	numBits = (numBits == 5);
 }
-/* Конец ISR(CLUNET_TIMER_COMP_VECTOR) */
+/* End of ISR(CLUNET_TIMER_COMP_VECTOR) */
 
-
-/* Процедура внешнего прерывания по фронту и спаду сигнала (ОЗУ: 4 байта) */
+/* External interrupt service routine (RAM: 6 bytes) */
 ISR(CLUNET_INT_VECTOR)
 {
+<<<<<<< HEAD
 
 	static uint8_t bitIndex, byteIndex, bitStuff, tickSync; // Статические переменные (ОЗУ: 4 байта)
 
 	// Текущее значение таймера
+=======
+	// Static variables (RAM: 6 bytes)
+	static uint8_t dataByte, byteIndex, bitIndex, bitStuff, lastTime, crc;
+	
+>>>>>>> refs/remotes/origin/test
 	const uint8_t now = CLUNET_TIMER_REG;
+	const uint8_t lineFree = CLUNET_READING ? 0 : 255;
+	uint8_t bitNum = 0; // Number of reading bits
 
-	// Многоцелевая переменная состояния линии и заполнения байт соответствующими значениями
-	const uint8_t lineFree = CLUNET_READING ? 0x00 : 0xFF;
-
-	// Количество прочитанных бит
-	uint8_t bitNum = 0;
-
-	if (readingState)
+	if ((readingState & STATE_ACTIVE) || (sendingState & STATE_ACTIVE))
 	{
-
-		uint8_t ticks, period;
-
-		// Цикл подсчета количества бит с момента последней синхронизации по спаду
-		for (ticks = now - tickSync, period = (CLUNET_T / 2); ticks >= period; period += CLUNET_T)
+		// Reading bits
+		const uint8_t ticks = now - lastTime;
+		const uint8_t t12 = CLUNET_T / 2;
+		if ((ticks >= t12) && (ticks < (5 * CLUNET_T + t12)))
 		{
-			// Ошибка: нет битстаффинга
-			if (++bitNum > 5)
-			{
-				readingState = CLUNET_READING_ERROR;
-				break;
-			}
+			uint8_t period = t12;
+			for ( ; ticks >= period; period += CLUNET_T, bitNum++);
+			if (lineFree)
+				lastTime += bitNum * CLUNET_T;
 		}
-
-		// Ошибка: не может быть нулем
-		if (!bitNum)
-			readingState = CLUNET_READING_ERROR;
-
 	}
 
-	// Если линию освободило
-	if (lineFree)
+	// If sending is active
+	if (sendingState & STATE_ACTIVE)
 	{
-		// Корректируем время по прочитанным битам
-		tickSync += bitNum * CLUNET_T;
-
-		// Сохраним количество прочитанных доминантных бит для проверки в процедуре передачи.
-		// Необходимо на случай передачи нами рецессивных бит в моменты передачи кем-то доминантных.
-		// В этих случаях мы сюда не попадаем, а следовательно данные переданные и прочтенные будут различаться.
-		readingActiveBits = bitNum;
-		
-		// Если состояние передачи неактивно либо в ожидании, то запланируем сброс чтения и, при необходимости, начало передачи через 7Т
-		if (!(sendingState & 3))
+		// Check for conflict on the line
+		if ((lineFree && (bitNum > dominantTask)) || (!lineFree && (bitNum < recessiveTask)))
 		{
+<<<<<<< HEAD
 			CLUNET_TIMER_REG_OCR = tickSync + (7 * CLUNET_T - 1);
 			CLUNET_ENABLE_TIMER_COMP;
+=======
+			sendingState = recessiveTask = STATE_WAIT_INTERFRAME;
+			goto _wait_interframe;
+>>>>>>> refs/remotes/origin/test
 		}
+		recessiveTask = 0; // Used as reading interrupt flag
 	}
-	
-	// Если линию прижало к нулю (все устройства синхронизируются по спаду в независимости от состояний чтения и передачи)
+	// If sending not active
 	else
 	{
-
-		/* СИНХРОНИЗАЦИЯ ЧТЕНИЯ */
-		tickSync = now;		// Синхронизация времени чтения
-
-		/* СИНХРОНИЗАЦИЯ ПЕРЕДАЧИ И АРБИТРАЖ */
-		// Проверка на конфликт передачи. Если мы в активной фазе передачи, и не жмем линию
-		if (sendingState & 3)
+_wait_interframe:
+		// If line is pull-up
+		if (lineFree)
 		{
-			if (!CLUNET_SENDING)
-			{
-				// Разница должна быть в идеале -1, так как прерывание сравнения вызывается на OCR+1, но так как нам ясно, что прерывания не было,
-				// то при 0, а тем более -1 мы в него попадем после выхода отсюда, поэтому эту разницу мы должны проигнорировать
-				// Да, и разница < 0, естественно, из области фантастики.
-				int8_t delta = CLUNET_TIMER_REG_OCR - now;
-		
-				const int8_t max_delta = (int8_t)((float)CLUNET_T * 0.3f);
-		
-				// Если разница во времени когда мы должны прижать линию более 0.3Т, то конфликт однозначен - отдаем линию другому устройству (арбитраж проигран), но чтение продолжаем :)
-				if (delta >= max_delta)
-				{
-					CLUNET_DISABLE_TIMER_COMP;
-					sendingState = CLUNET_SENDING_WAIT;
-				}
-				// Если разница во времени менее 0.3Т, то это рассинхронизация, синхронизируем регистр сравнения и быстро попадаем в прерывание сравнения для продолжения передачи
-				else if (delta > 0)
-					CLUNET_TIMER_REG_OCR = now;
-			}
+			CLUNET_TIMER_REG_OCR = now + (7 * CLUNET_T - 1);
+			CLUNET_ENABLE_TIMER_COMP;
 		}
+		// If line is pull-down
 		else
 			CLUNET_DISABLE_TIMER_COMP;
-
-		// Если в ожидании приема пакета, то переходим к фазе начала приемки кадра, обнуляем счетчики и выходим
-		if (!readingState)
-		{
-			readingState = CLUNET_READING_START;
-			byteIndex = bitIndex = 0;
-			return;
-		}
-
 	}
 
-	switch (readingState)
+	// On falling edge
+	if (!lineFree)
 	{
-		// Главная фаза чтения данных
-		case CLUNET_READING_DATA:
+		lastTime = now; // Update time value
+		// If reading in IDLE state - start reading process
+		if (!readingState)
+		{
+<<<<<<< HEAD
+			readingState = CLUNET_READING_START;
+			byteIndex = bitIndex = 0;
+=======
+			dataByte = readingPriority = byteIndex = crc = 0;
+			recessiveTask = bitStuff = 1;
+			readingState = STATE_ACTIVE;
+			bitIndex = 5;
+>>>>>>> refs/remotes/origin/test
+			return;
+		}
+	}
 
-			// Если линия освободилась, значит была единичная посылка - установим соответствующие биты
-			if (lineFree)
-				readBuffer[byteIndex] |= (0xFF >> bitIndex);
+	// On error reading bits
+	if (!bitNum)
+		readingState = STATE_WAIT_INTERFRAME;
 
-			// Если линия прижалась, значит была нулевая посылка - сбросим соответствующие биты
-			else
-				readBuffer[byteIndex] &= ~(0xFF >> bitIndex);
+	// Exit if reading is NOT ACTIVE
+	if (!(readingState & STATE_ACTIVE))
+		return;
 
+	const uint8_t mask = (0xFF >> bitIndex);
+
+<<<<<<< HEAD
 			// Обновим битовый индекс с учетом битстаффинга
 			bitIndex += bitNum - bitStuff;
 
@@ -392,28 +424,54 @@ ISR(CLUNET_INT_VECTOR)
 			}
 
 			break;
+=======
+	// Если линия освободилась, значит была единичная посылка - установим соответствующие биты
+	if (lineFree)
+		dataByte |= mask;
+	// Если линия прижалась, значит была нулевая посылка - сбросим соответствующие биты
+	else
+		dataByte &= ~mask;
+>>>>>>> refs/remotes/origin/test
 
-		// Фаза приемки начала кадра
-		case CLUNET_READING_START:
-			
-			bitIndex += bitNum;
+	// Update bit index with bitstuff correction
+	bitIndex += bitNum - bitStuff;
 
-			// Если прочитаны биты начала кадра (1-ый стартовый, 2-4 приоритет)
-			if (bitIndex >= 4)
-			{
-				readBuffer[0] = lineFree;
-				bitIndex -= 4;					// Коррекция индекса чтения бита
-				readingState = CLUNET_READING_DATA;		// К следующей фазе чтения данных
-			}
+	// Whole byte readed
+	if (bitIndex & 8)
+	{
+		if (readingPriority)
+			readBuffer[byteIndex++] = dataByte;
+		else
+			readingPriority = dataByte + 1;
 
+		// Whole packet readed
+		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > RECEIVED_DATA_SIZE + CLUNET_OFFSET_DATA))
+		{
+			// Packet from another device, line is busy
+			if (/*!recessiveTask ||*/ !check_crc(readBuffer, byteIndex))
+				process_received_packet();
+			readingState = STATE_WAIT_INTERFRAME;
+		}
+		
+		// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
+		else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
+		{
+			bitIndex &= 7;
+			dataByte = lineFree;
+		}
+		
+		// Иначе ошибка: нехватка приемного буфера -> игнорируем пакет
+		else
+			readingState = STATE_WAIT_INTERFRAME;
 	}
+
 	/* Проверка на битстаффинг, учитываем в следующем цикле */
 	bitStuff = (bitNum == 5);
 }
-/* Конец ISR(CLUNET_INT_VECTOR) */
+/* End of ISR(CLUNET_INT_VECTOR) */
 
 void
-clunet_init()
+clunet_init(void)
 {
 	sendingLength = MCUSR; // Используем переменную sendingLength для отправки содержимого регистра MCUSR
 	MCUSR = 0;
@@ -435,11 +493,8 @@ void
 clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, const char* data, const uint8_t size)
 {
 	/* Если размер данных в пределах буфера передачи (максимально для протокола 250 байт) */
-	if (size < (CLUNET_SEND_BUFFER_SIZE - CLUNET_OFFSET_DATA))
+	if (!sendingState && size < (CLUNET_SEND_BUFFER_SIZE - CLUNET_OFFSET_DATA))
 	{
-
-		CLUNET_DISABLE_TIMER_COMP;	// Запретим прерывание сравнения, тем самым запретим и отправку и исключим конкурентный доступ к буферу
-
 		/* Заполняем переменные */
 		sendingPriority = (prio > 8) ? 8 : prio ? : 1;
 		sendBuffer[CLUNET_OFFSET_SRC_ADDRESS] = CLUNET_DEVICE_ID;
@@ -460,27 +515,29 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 
 		sendingLength = size + CLUNET_OFFSET_DATA + 1;
 
-		sendingState = CLUNET_SENDING_WAIT;	// Фаза ожидания линии
-
-		// Если линия свободна, то запланируем отправку
-		if (!CLUNET_READING)
-		{
-			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7 * CLUNET_T - 1);
-			CLUNET_ENABLE_TIMER_COMP;
-		}
-
-		// Все равно отпустим линию (вдруг задержки на заряд паразитной емкости линии) и процедура внешнего прерывания сама запланирует отправку
-		CLUNET_SEND_0;
-
+		clunet_resend_last_packet();
 	}
 }
 /* Конец void clunet_send(.....) */
 
 /* Возвращает 0, если готов к передаче, иначе приоритет текущей задачи */
 uint8_t
-clunet_ready_to_send()
+clunet_ready_to_send(void)
 {
 	return sendingState ? sendingPriority : 0;
+}
+
+void
+clunet_resend_last_packet(void)
+{
+	sendingState = STATE_WAIT_INTERFRAME;
+
+	// If ready to reading: start sending as soon as possible
+	if (!readingState)
+	{
+		CLUNET_ENABLE_TIMER_COMP;
+		CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG;
+	}
 }
 
 void
