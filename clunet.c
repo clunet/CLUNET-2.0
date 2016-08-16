@@ -47,14 +47,6 @@ SOFTWARE.
 static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
-<<<<<<< HEAD
-/* Глобальные статические переменные (ОЗУ: 5 байт) */
-static uint8_t sendingState = CLUNET_SENDING_IDLE; // Состояние передачи
-static uint8_t sendingLength; // Длина данных для отправки вместе с заголовком кадра
-static uint8_t sendingPriority; // Приоритет отправляемого пакета (от 1 до 8)
-static uint8_t readingState = CLUNET_READING_IDLE; // Состояние чтения
-static uint8_t readingActiveBits; // Количество активных прочитанных бит
-=======
 /* Global static variables (RAM: 7 bytes) */
 static uint8_t readingState = STATE_IDLE; // Current reading state
 static uint8_t sendingState = STATE_IDLE; // Current sending state
@@ -63,7 +55,6 @@ static uint8_t sendingPriority; // Sending priority (1 to 8)
 static uint8_t sendingLength; // Sending data length
 static uint8_t dominantTask; // Dominant task (bits)
 static uint8_t recessiveTask; // Recessive task (bits)
->>>>>>> refs/remotes/origin/test
 
 /* Data buffers */
 static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Sending data buffer
@@ -193,17 +184,6 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	// If not - this is 3-rd type of conflict. In this case we must switch to READ mode and stop sending.
 	else
 	{
-<<<<<<< HEAD
-		// Если линию заняли, то сделаем короткий стоповый импульс длительностью 1Т
-		if (!lineFree)
-			goto _delay_1t;
-
-		// Если линию отпустили, то стоповый бит не требуется, во внешнем прерывании запланируются все необходимые действия
-		sendingState = CLUNET_SENDING_IDLE;
-		goto _disable;
-
-	}
-=======
 		// Check if we not been in reading ISR or first send cycle
 		if (recessiveTask)
 		{
@@ -213,7 +193,6 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		}
 
 		CLUNET_SEND_1;
->>>>>>> refs/remotes/origin/test
 
 		// If data sending complete
 		if (bitIndex & 8)
@@ -227,43 +206,8 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	/* COLLECTING DATA BITS */
 	do
 	{
-<<<<<<< HEAD
-		// Главная фаза передачи данных
-		case CLUNET_SENDING_DATA:
-_send_data:
-			// Если мы прижали линию, то ищем единичные биты, иначе - нулевые
-			while (((sendBuffer[byteIndex] << bitIndex) & 0x80) ^ lineFree)
-			{
-
-				numBits++;
-
-				/* Если передан байт данных */
-				if (++bitIndex & 8)
-				{
-					/* Если передача всех данных закончена, то перейдем к завершающей стадии */
-					if (++byteIndex == sendingLength)
-					{
-						sendingState = CLUNET_SENDING_STOP;
-						break;
-					}
-					// Если данные не закончились, то начинаем передачу следующего байта с бита 0
-					bitIndex = 0;
-				}
-
-				/* Если набрали для передачи 5 бит, то выходим из цикла */
-				if (numBits == 5)
-					break;
-
-			}
-			
-			break;
-
-		// Фаза отправки заголовка кадра
-		case CLUNET_SENDING_INIT:
-=======
 		const uint8_t bitValue = dataByte & (0x80 >> bitIndex);
 		if ((lineFree && !bitValue) || (!lineFree && bitValue))
->>>>>>> refs/remotes/origin/test
 		{
 			numBits++;
 
@@ -298,16 +242,9 @@ _send_data:
 /* External interrupt service routine (RAM: 6 bytes) */
 ISR(CLUNET_INT_VECTOR)
 {
-<<<<<<< HEAD
-
-	static uint8_t bitIndex, byteIndex, bitStuff, tickSync; // Статические переменные (ОЗУ: 4 байта)
-
-	// Текущее значение таймера
-=======
 	// Static variables (RAM: 6 bytes)
 	static uint8_t dataByte, byteIndex, bitIndex, bitStuff, lastTime, crc;
 	
->>>>>>> refs/remotes/origin/test
 	const uint8_t now = CLUNET_TIMER_REG;
 	const uint8_t lineFree = CLUNET_READING ? 0 : 255;
 	uint8_t bitNum = 0; // Number of reading bits
@@ -332,13 +269,8 @@ ISR(CLUNET_INT_VECTOR)
 		// Check for conflict on the line
 		if ((lineFree && (bitNum > dominantTask)) || (!lineFree && (bitNum < recessiveTask)))
 		{
-<<<<<<< HEAD
-			CLUNET_TIMER_REG_OCR = tickSync + (7 * CLUNET_T - 1);
-			CLUNET_ENABLE_TIMER_COMP;
-=======
 			sendingState = recessiveTask = STATE_WAIT_INTERFRAME;
 			goto _wait_interframe;
->>>>>>> refs/remotes/origin/test
 		}
 		recessiveTask = 0; // Used as reading interrupt flag
 	}
@@ -364,15 +296,10 @@ _wait_interframe:
 		// If reading in IDLE state - start reading process
 		if (!readingState)
 		{
-<<<<<<< HEAD
-			readingState = CLUNET_READING_START;
-			byteIndex = bitIndex = 0;
-=======
 			dataByte = readingPriority = byteIndex = crc = 0;
 			recessiveTask = bitStuff = 1;
 			readingState = STATE_ACTIVE;
 			bitIndex = 5;
->>>>>>> refs/remotes/origin/test
 			return;
 		}
 	}
@@ -387,51 +314,12 @@ _wait_interframe:
 
 	const uint8_t mask = (0xFF >> bitIndex);
 
-<<<<<<< HEAD
-			// Обновим битовый индекс с учетом битстаффинга
-			bitIndex += bitNum - bitStuff;
-
-			if (bitIndex & 8)
-			{
-				// Если пакет прочитан полностью, то проверим контрольную сумму
-				if ((++byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > (uint8_t)readBuffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
-				{
-					readingState = CLUNET_READING_IDLE;
-					// If CRC is correct - process incoming packet
-					if (!check_crc(readBuffer, byteIndex))
-					{
-						clunet_data_received (
-							readBuffer[CLUNET_OFFSET_SRC_ADDRESS],
-							readBuffer[CLUNET_OFFSET_DST_ADDRESS],
-							readBuffer[CLUNET_OFFSET_COMMAND],
-							readBuffer + CLUNET_OFFSET_DATA,
-							readBuffer[CLUNET_OFFSET_SIZE]
-						);
-					}
-				}
-
-				// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
-				else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
-				{
-					bitIndex &= 7;
-					readBuffer[byteIndex] = lineFree;
-				}
-
-				// Иначе ошибка: нехватка приемного буфера -> игнорируем пакет
-				else
-					readingState = CLUNET_READING_ERROR;
-
-			}
-
-			break;
-=======
 	// Если линия освободилась, значит была единичная посылка - установим соответствующие биты
 	if (lineFree)
 		dataByte |= mask;
 	// Если линия прижалась, значит была нулевая посылка - сбросим соответствующие биты
 	else
 		dataByte &= ~mask;
->>>>>>> refs/remotes/origin/test
 
 	// Update bit index with bitstuff correction
 	bitIndex += bitNum - bitStuff;
