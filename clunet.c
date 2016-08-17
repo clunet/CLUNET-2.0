@@ -48,7 +48,7 @@ static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, 
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
 /* Global static variables (RAM: 7 bytes) */
-static uint8_t readingState = STATE_IDLE; // Current reading state
+static uint8_t readingState; // Current reading state
 static uint8_t sendingState = STATE_IDLE; // Current sending state
 static uint8_t readingPriority; // Receiving packet priority
 static uint8_t sendingPriority; // Sending priority (1 to 8)
@@ -367,7 +367,15 @@ clunet_init(void)
 	CLUNET_TIMER_INIT;
 	CLUNET_PIN_INIT;
 	CLUNET_INT_INIT;
-	sei();
+	// Start with WAIT_INTERFRAME state
+	readingState = STATE_WAIT_INTERFRAME;
+	// If line is free, then planning reset reading state
+	if (!CLUNET_READING)
+	{
+		CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7 * CLUNET_T - 1);
+		CLUNET_ENABLE_TIMER_COMP;
+	}
+	sei(); // Enable global interrupts
 	clunet_send (
 		CLUNET_BROADCAST_ADDRESS,
 		CLUNET_PRIORITY_MESSAGE,
@@ -381,8 +389,11 @@ void
 clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, const char* data, const uint8_t size)
 {
 	/* Если размер данных в пределах буфера передачи (максимально для протокола 250 байт) */
-	if (!sendingState && size < (CLUNET_SEND_BUFFER_SIZE - CLUNET_OFFSET_DATA))
+	if (size < (CLUNET_SEND_BUFFER_SIZE - CLUNET_OFFSET_DATA))
 	{
+		CLUNET_DISABLE_TIMER_COMP;
+		sendingState = STATE_IDLE;
+
 		/* Заполняем переменные */
 		sendingPriority = (prio > 8) ? 8 : prio ? : 1;
 		sendBuffer[CLUNET_OFFSET_SRC_ADDRESS] = CLUNET_DEVICE_ID;
