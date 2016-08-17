@@ -391,9 +391,13 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 	/* Если размер данных в пределах буфера передачи (максимально для протокола 250 байт) */
 	if (size < (CLUNET_SEND_BUFFER_SIZE - CLUNET_OFFSET_DATA))
 	{
-		CLUNET_DISABLE_TIMER_COMP;
-		sendingState = STATE_IDLE;
-
+		if (sendingState)
+		{
+			CLUNET_DISABLE_TIMER_COMP;
+			sendingState = STATE_IDLE;
+			CLUNET_SEND_0;
+		}
+		
 		/* Заполняем переменные */
 		sendingPriority = (prio > 8) ? 8 : prio ? : 1;
 		sendBuffer[CLUNET_OFFSET_SRC_ADDRESS] = CLUNET_DEVICE_ID;
@@ -409,11 +413,11 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 				sendBuffer[CLUNET_OFFSET_DATA + idx] = data[idx];
 			while (++idx < size);
 		}
-
+		
 		sendBuffer[CLUNET_OFFSET_DATA + size] = check_crc(sendBuffer, CLUNET_OFFSET_DATA + size);
-
+		
 		sendingLength = size + CLUNET_OFFSET_DATA + 1;
-
+		
 		clunet_resend_last_packet();
 	}
 }
@@ -429,13 +433,26 @@ clunet_ready_to_send(void)
 void
 clunet_resend_last_packet(void)
 {
-	sendingState = STATE_WAIT_INTERFRAME;
-
-	// If ready to reading: start sending as soon as possible
-	if (!readingState)
+	// If sending in IDLE state
+	if (!sendingState)
 	{
-		CLUNET_ENABLE_TIMER_COMP;
-		CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG;
+		sendingState = STATE_WAIT_INTERFRAME; // Set sending to WAIT_INTERFRAME state
+	
+		// If ready to reading: start sending as soon as possible
+		if (!readingState)
+		{
+			CLUNET_ENABLE_TIMER_COMP;
+			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG;
+		}
+
+		else if (!CLUNET_READING)
+		{
+			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7 * CLUNET_T - 1);
+			CLUNET_ENABLE_TIMER_COMP;
+		}
+
+		else
+			CLUNET_DISABLE_TIMER_COMP;
 	}
 }
 
