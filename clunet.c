@@ -30,6 +30,7 @@ SOFTWARE.
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
+#include <util/crc16.h>
 
 #define STATE_IDLE 0
 #define STATE_ACTIVE 1
@@ -71,19 +72,7 @@ check_crc(const char* data, const uint8_t size)
 	uint8_t crc = 0;
 	uint8_t a = 0;
 	do
-	{
-		uint8_t b = 8;
-		uint8_t inbyte = data[a];
-		do
-		{
-			uint8_t mix = crc ^ inbyte;
-			crc >>= 1;
-			if (mix & 1)
-				crc ^= 0x8C;
-			inbyte >>= 1;
-		}
-		while (--b);
-	}
+		crc = _crc_ibutton_update(crc, data[a]);
 	while (++a < size);
 	return crc;
 }
