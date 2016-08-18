@@ -43,7 +43,6 @@ SOFTWARE.
 #define RECEIVED_DATA_PTR read_buffer + CLUNET_OFFSET_DATA
 #define RECEIVED_DATA_SIZE (uint8_t)read_buffer[CLUNET_OFFSET_SIZE]
 
-
 /* Pointers to the callback functions on receiving packet (must be short as possible) */
 static void (*cb_data_received)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
 static void (*cb_data_received_sniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
@@ -129,7 +128,7 @@ process_received_packet(void)
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
 	// Static variables
-	static uint8_t dataByte, byteIndex, bitIndex, numBits;
+	static uint8_t data_byte, byte_index, bit_index, bit_task;
 	
 	// If in NOT ACTIVE state
 	if (!(sending_state & STATE_ACTIVE))
@@ -144,23 +143,23 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		}
 		// If in WAIT_INTERFRAME state: starting sending throuth 1Т
 		sending_state = STATE_ACTIVE; // Set sending process to ACTIVE state
-		dataByte = sending_priority - 1; // First need send priority (3 bits)
-		byteIndex = 0; // Data index
-		bitIndex = 5; // Priority bits position
-		numBits = 1; // Start bit
+		data_byte = sending_priority - 1; // First need send priority (3 bits)
+		byte_index = 0; // Data index
+		bit_index = 5; // Priority bits position
+		bit_task = 1; // Start bit
 		recessive_task = 0; // Reset recessive task
 		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
 		return;
 	}
 	
-	const uint8_t lineFree = CLUNET_SENDING;
+	const uint8_t line_pullup = CLUNET_SENDING;
 
 	// If we need to free line - do it and check for end data.
-	if (lineFree)
+	if (line_pullup)
 	{
 		CLUNET_SEND_0;
 		// If data sending complete
-		if (bitIndex & 8)
+		if (bit_index & 8)
 		{
 			CLUNET_DISABLE_TIMER_COMP;
 			sending_state = STATE_IDLE;
@@ -184,7 +183,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		CLUNET_SEND_1;
 
 		// If data sending complete
-		if (bitIndex & 8)
+		if (bit_index & 8)
 		{
 			CLUNET_TIMER_REG_OCR += CLUNET_T;
 			dominant_task = 1;
@@ -195,36 +194,36 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	/* COLLECTING DATA BITS */
 	do
 	{
-		const uint8_t bitValue = dataByte & (0x80 >> bitIndex);
-		if ((lineFree && !bitValue) || (!lineFree && bitValue))
+		const uint8_t bit_value = data_byte & (0x80 >> bit_index);
+		if ((line_pullup && !bit_value) || (!line_pullup && bit_value))
 		{
-			numBits++;
+			bit_task++;
 
 			// If sending byte complete: reset bit index and get next byte to send
-			if (++bitIndex & 8)
+			if (++bit_index & 8)
 			{
 				// If data complete: exit and send this last bits
-				if (byteIndex == sending_length)
+				if (byte_index == sending_length)
 					break;
-				dataByte = send_buffer[byteIndex++];
-				bitIndex = 0;
+				data_byte = send_buffer[byte_index++];
+				bit_index = 0;
 			}
 		}
 		else
 			break;
 	}
-	while (numBits != 5);
+	while (bit_task != 5);
 	
 	// Update OCR
-	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
+	CLUNET_TIMER_REG_OCR += CLUNET_T * bit_task;
 
-	if (lineFree)
-		recessive_task = numBits;
+	if (line_pullup)
+		recessive_task = bit_task;
 	else
-		dominant_task = numBits;
+		dominant_task = bit_task;
 
-	// Bitstuff correction
-	numBits = (numBits == 5);
+	// Bit stuffing correction
+	bit_task = (bit_task == 5);
 }
 /* End of ISR(CLUNET_TIMER_COMP_VECTOR) */
 
@@ -232,23 +231,23 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 ISR(CLUNET_INT_VECTOR)
 {
 	// Static variables (RAM: 6 bytes)
-	static uint8_t dataByte, byteIndex, bitIndex, bitStuff, lastTime, crc;
+	static uint8_t data_byte, byte_index, bit_index, bit_stuffing, last_time, ibutton_crc;
 	
 	const uint8_t now = CLUNET_TIMER_REG;
-	const uint8_t lineFree = CLUNET_READING ? 0 : 255;
-	uint8_t bitNum = 0; // Number of reading bits
+	const uint8_t front_edge = CLUNET_READING ? 0 : 255;
+	uint8_t num_bits = 0; // Number of reading bits
 
 	if ((reading_state & STATE_ACTIVE) || (sending_state & STATE_ACTIVE))
 	{
 		// Reading bits
-		const uint8_t ticks = now - lastTime;
+		const uint8_t ticks = now - last_time;
 		const uint8_t t12 = CLUNET_T / 2;
 		if ((ticks >= t12) && (ticks < (5 * CLUNET_T + t12)))
 		{
 			uint8_t period = t12;
-			for ( ; ticks >= period; period += CLUNET_T, bitNum++);
-			if (lineFree)
-				lastTime += bitNum * CLUNET_T;
+			for ( ; ticks >= period; period += CLUNET_T, num_bits++);
+			if (front_edge)
+				last_time += num_bits * CLUNET_T;
 		}
 	}
 
@@ -256,7 +255,7 @@ ISR(CLUNET_INT_VECTOR)
 	if (sending_state & STATE_ACTIVE)
 	{
 		// Check for conflict on the line
-		if ((lineFree && (bitNum > dominant_task)) || (!lineFree && (bitNum < recessive_task)))
+		if ((front_edge && (num_bits > dominant_task)) || (!front_edge && (num_bits < recessive_task)))
 		{
 			sending_state = recessive_task = STATE_WAIT_INTERFRAME;
 			goto _wait_interframe;
@@ -268,7 +267,7 @@ ISR(CLUNET_INT_VECTOR)
 	{
 _wait_interframe:
 		// If line is pull-up
-		if (lineFree)
+		if (front_edge)
 		{
 			CLUNET_TIMER_REG_OCR = now + (7 * CLUNET_T - 1);
 			CLUNET_ENABLE_TIMER_COMP;
@@ -279,62 +278,62 @@ _wait_interframe:
 	}
 
 	// On falling edge
-	if (!lineFree)
+	if (!front_edge)
 	{
-		lastTime = now; // Update time value
+		last_time = now; // Update time value
 		// If reading in IDLE state - start reading process
 		if (!reading_state)
 		{
-			dataByte = reading_priority = byteIndex = crc = 0;
-			recessive_task = bitStuff = 1;
+			data_byte = reading_priority = byte_index = ibutton_crc = 0;
+			recessive_task = bit_stuffing = 1;
 			reading_state = STATE_ACTIVE;
-			bitIndex = 5;
+			bit_index = 5;
 			return;
 		}
 	}
 
 	// On error reading bits
-	if (!bitNum)
+	if (!num_bits)
 		reading_state = STATE_WAIT_INTERFRAME;
 
 	// Exit if reading is NOT ACTIVE
 	if (!(reading_state & STATE_ACTIVE))
 		return;
 
-	const uint8_t mask = (0xFF >> bitIndex);
+	const uint8_t mask = (0xFF >> bit_index);
 
 	// Если линия освободилась, значит была единичная посылка - установим соответствующие биты
-	if (lineFree)
-		dataByte |= mask;
+	if (front_edge)
+		data_byte |= mask;
 	// Если линия прижалась, значит была нулевая посылка - сбросим соответствующие биты
 	else
-		dataByte &= ~mask;
+		data_byte &= ~mask;
 
-	// Update bit index with bitstuff correction
-	bitIndex += bitNum - bitStuff;
+	// Update bit index with bit stuffing correction
+	bit_index += num_bits - bit_stuffing;
 
 	// Whole byte readed
-	if (bitIndex & 8)
+	if (bit_index & 8)
 	{
 		if (reading_priority)
-			read_buffer[byteIndex++] = dataByte;
+			read_buffer[byte_index++] = data_byte;
 		else
-			reading_priority = dataByte + 1;
+			reading_priority = data_byte + 1;
 
 		// Whole packet readed
-		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > RECEIVED_DATA_SIZE + CLUNET_OFFSET_DATA))
+		if ((byte_index > CLUNET_OFFSET_SIZE) && (byte_index > RECEIVED_DATA_SIZE + CLUNET_OFFSET_DATA))
 		{
 			// Packet from another device, line is busy
-			if (/*!recessive_task ||*/ !check_crc(read_buffer, byteIndex))
+			if (/*!recessive_task ||*/ !check_crc(read_buffer, byte_index))
 				process_received_packet();
 			reading_state = STATE_WAIT_INTERFRAME;
 		}
 		
 		// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
-		else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
+		else if (byte_index < CLUNET_READ_BUFFER_SIZE)
 		{
-			bitIndex &= 7;
-			dataByte = lineFree;
+			bit_index &= 7;
+			data_byte = front_edge;
 		}
 		
 		// Иначе ошибка: нехватка приемного буфера -> игнорируем пакет
@@ -343,7 +342,7 @@ _wait_interframe:
 	}
 
 	/* Проверка на битстаффинг, учитываем в следующем цикле */
-	bitStuff = (bitNum == 5);
+	bit_stuffing = (num_bits == 5);
 }
 /* End of ISR(CLUNET_INT_VECTOR) */
 
