@@ -231,7 +231,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 ISR(CLUNET_INT_VECTOR)
 {
 	// Static variables (RAM: 6 bytes)
-	static uint8_t data_byte, byte_index, bit_index, bit_stuffing, last_time, ibutton_crc;
+	static uint8_t data_byte, byte_index, bit_index, bit_stuffing, last_time, crc;
 	
 	const uint8_t now = CLUNET_TIMER_REG;
 	const uint8_t front_edge = CLUNET_READING ? 0 : 255;
@@ -284,7 +284,7 @@ _wait_interframe:
 		// If reading in IDLE state - start reading process
 		if (!reading_state)
 		{
-			data_byte = reading_priority = byte_index = ibutton_crc = 0;
+			data_byte = reading_priority = byte_index = crc = 0;
 			recessive_task = bit_stuffing = 1;
 			reading_state = STATE_ACTIVE;
 			bit_index = 5;
@@ -316,7 +316,10 @@ _wait_interframe:
 	if (bit_index & 8)
 	{
 		if (reading_priority)
+		{
 			read_buffer[byte_index++] = data_byte;
+			crc = _crc_ibutton_update(crc, data_byte);
+		}
 		else
 			reading_priority = data_byte + 1;
 
@@ -324,7 +327,7 @@ _wait_interframe:
 		if ((byte_index > CLUNET_OFFSET_SIZE) && (byte_index > RECEIVED_DATA_SIZE + CLUNET_OFFSET_DATA))
 		{
 			// Packet from another device, line is busy
-			if (/*!recessive_task ||*/ !check_crc(read_buffer, byte_index))
+			if (/*!recessive_task || !check_crc(read_buffer, byte_index)*/ !crc)
 				process_received_packet();
 			reading_state = STATE_WAIT_INTERFRAME;
 		}
