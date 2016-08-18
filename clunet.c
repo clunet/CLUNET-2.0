@@ -37,16 +37,16 @@ SOFTWARE.
 #define STATE_WAIT_INTERFRAME 2
 #define STATE_PROCESS 4
 
-#define RECEIVED_SRC_ADDRESS (uint8_t)readBuffer[CLUNET_OFFSET_SRC_ADDRESS]
-#define RECEIVED_DST_ADDRESS (uint8_t)readBuffer[CLUNET_OFFSET_DST_ADDRESS]
-#define RECEIVED_COMMAND (uint8_t)readBuffer[CLUNET_OFFSET_COMMAND]
-#define RECEIVED_DATA_PTR readBuffer + CLUNET_OFFSET_DATA
-#define RECEIVED_DATA_SIZE (uint8_t)readBuffer[CLUNET_OFFSET_SIZE]
+#define RECEIVED_SRC_ADDRESS (uint8_t)read_buffer[CLUNET_OFFSET_SRC_ADDRESS]
+#define RECEIVED_DST_ADDRESS (uint8_t)read_buffer[CLUNET_OFFSET_DST_ADDRESS]
+#define RECEIVED_COMMAND (uint8_t)read_buffer[CLUNET_OFFSET_COMMAND]
+#define RECEIVED_DATA_PTR read_buffer + CLUNET_OFFSET_DATA
+#define RECEIVED_DATA_SIZE (uint8_t)read_buffer[CLUNET_OFFSET_SIZE]
 
 
 /* Pointers to the callback functions on receiving packet (must be short as possible) */
-static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
-static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
+static void (*cb_data_received)(uint8_t src_address, uint8_t command, char* data, uint8_t size) = 0;
+static void (*cb_data_received_sniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
 /* Global static variables (RAM: 7 bytes) */
 static uint8_t reading_state; // Current reading state
@@ -58,11 +58,11 @@ static uint8_t dominant_task; // Dominant task (bits)
 static uint8_t recessive_task; // Recessive task (bits)
 
 /* Data buffers */
-static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Sending data buffer
-static char readBuffer[CLUNET_READ_BUFFER_SIZE]; // Reading data buffer
+static char send_buffer[CLUNET_SEND_BUFFER_SIZE]; // Sending data buffer
+static char read_buffer[CLUNET_READ_BUFFER_SIZE]; // Reading data buffer
 
 #ifdef CLUNET_DEVICE_NAME
- static const char devName[] = CLUNET_DEVICE_NAME; // Simple and short device name
+ static const char device_name[] = CLUNET_DEVICE_NAME; // Simple and short device name
 #endif
 
 /* Function for calculate Maxim iButton 8-bit checksum */
@@ -87,8 +87,8 @@ process_received_packet(void)
 	const uint8_t data_size = RECEIVED_DATA_SIZE;
 	char* data_ptr = RECEIVED_DATA_PTR;
 
-	if (cbDataReceivedSniff)
-		(*cbDataReceivedSniff)(src_address, dst_address, command, data_ptr, data_size);
+	if (cb_data_received_sniff)
+		(*cb_data_received_sniff)(src_address, dst_address, command, data_ptr, data_size);
 
 	if ((src_address != CLUNET_DEVICE_ID) && ((dst_address == CLUNET_DEVICE_ID) || (dst_address == CLUNET_BROADCAST_ADDRESS)))
 	{
@@ -105,9 +105,9 @@ process_received_packet(void)
 			{
 				/* Answer for discovery command */
 				case CLUNET_COMMAND_DISCOVERY:
-	
+					
 					#ifdef CLUNET_DEVICE_NAME
-					clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, devName, sizeof(devName) - 1);
+					clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, device_name, sizeof(device_name) - 1);
 					#else
 					clunet_send(src_address, CLUNET_PRIORITY_MESSAGE, CLUNET_COMMAND_DISCOVERY_RESPONSE, 0, 0);
 					#endif
@@ -120,8 +120,8 @@ process_received_packet(void)
 					return;
 			}
 		}
-		if (cbDataReceived)
-			(*cbDataReceived)(src_address, command, data_ptr, data_size);
+		if (cb_data_received)
+			(*cb_data_received)(src_address, command, data_ptr, data_size);
 	}
 }
 
@@ -206,7 +206,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 				// If data complete: exit and send this last bits
 				if (byteIndex == sending_length)
 					break;
-				dataByte = sendBuffer[byteIndex++];
+				dataByte = send_buffer[byteIndex++];
 				bitIndex = 0;
 			}
 		}
@@ -317,7 +317,7 @@ _wait_interframe:
 	if (bitIndex & 8)
 	{
 		if (reading_priority)
-			readBuffer[byteIndex++] = dataByte;
+			read_buffer[byteIndex++] = dataByte;
 		else
 			reading_priority = dataByte + 1;
 
@@ -325,7 +325,7 @@ _wait_interframe:
 		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > RECEIVED_DATA_SIZE + CLUNET_OFFSET_DATA))
 		{
 			// Packet from another device, line is busy
-			if (/*!recessive_task ||*/ !check_crc(readBuffer, byteIndex))
+			if (/*!recessive_task ||*/ !check_crc(read_buffer, byteIndex))
 				process_received_packet();
 			reading_state = STATE_WAIT_INTERFRAME;
 		}
@@ -389,21 +389,21 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 		
 		/* Заполняем переменные */
 		sending_priority = (prio > 8) ? 8 : prio ? : 1;
-		sendBuffer[CLUNET_OFFSET_SRC_ADDRESS] = CLUNET_DEVICE_ID;
-		sendBuffer[CLUNET_OFFSET_DST_ADDRESS] = address;
-		sendBuffer[CLUNET_OFFSET_COMMAND] = command;
-		sendBuffer[CLUNET_OFFSET_SIZE] = size;
+		send_buffer[CLUNET_OFFSET_SRC_ADDRESS] = CLUNET_DEVICE_ID;
+		send_buffer[CLUNET_OFFSET_DST_ADDRESS] = address;
+		send_buffer[CLUNET_OFFSET_COMMAND] = command;
+		send_buffer[CLUNET_OFFSET_SIZE] = size;
 		
 		/* Есть данные для отправки? Тогда скопируем их в буфер */
 		if (size && data)
 		{
 			uint8_t idx = 0;
 			do
-				sendBuffer[CLUNET_OFFSET_DATA + idx] = data[idx];
+				send_buffer[CLUNET_OFFSET_DATA + idx] = data[idx];
 			while (++idx < size);
 		}
 		
-		sendBuffer[CLUNET_OFFSET_DATA + size] = check_crc(sendBuffer, CLUNET_OFFSET_DATA + size);
+		send_buffer[CLUNET_OFFSET_DATA + size] = check_crc(send_buffer, CLUNET_OFFSET_DATA + size);
 		
 		sending_length = size + CLUNET_OFFSET_DATA + 1;
 		
@@ -448,11 +448,11 @@ clunet_resend_last_packet(void)
 void
 clunet_set_on_data_received(void (*f)(uint8_t src_address, uint8_t command, char* data, uint8_t size))
 {
-	cbDataReceived = f;
+	cb_data_received = f;
 }
 
 void
 clunet_set_on_data_received_sniff(void (*f)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size))
 {
-	cbDataReceivedSniff = f;
+	cb_data_received_sniff = f;
 }
