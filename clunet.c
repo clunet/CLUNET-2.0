@@ -128,7 +128,7 @@ process_received_packet(void)
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
 	// Static variables
-	static uint8_t data_byte, byte_index, bit_index, bit_task;
+	static uint8_t data_byte, byte_index, bit_mask, bit_task;
 	
 	// If in NOT ACTIVE state
 	if (!(sending_state & STATE_ACTIVE))
@@ -145,7 +145,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		sending_state = STATE_ACTIVE; // Set sending process to ACTIVE state
 		data_byte = sending_priority - 1; // First need send priority (3 bits)
 		byte_index = 0; // Data index
-		bit_index = 5; // Priority bits position
+		bit_mask = 0x04; // Init bit mask by priority MSB location
 		bit_task = 1; // Start bit
 		recessive_task = 0; // Reset recessive task
 		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
@@ -159,7 +159,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	{
 		CLUNET_SEND_0;
 		// If data sending complete
-		if (bit_index & 8)
+		if (!bit_mask)
 		{
 			CLUNET_DISABLE_TIMER_COMP;
 			sending_state = STATE_IDLE;
@@ -183,7 +183,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		CLUNET_SEND_1;
 
 		// If data sending complete
-		if (bit_index & 8)
+		if (!bit_mask)
 		{
 			CLUNET_TIMER_REG_OCR += CLUNET_T;
 			dominant_task = 1;
@@ -194,19 +194,19 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	/* COLLECTING DATA BITS */
 	do
 	{
-		const uint8_t bit_value = data_byte & (0x80 >> bit_index);
+		const uint8_t bit_value = data_byte & bit_mask;
 		if ((line_pullup && !bit_value) || (!line_pullup && bit_value))
 		{
 			bit_task++;
 
 			// If sending byte complete: reset bit index and get next byte to send
-			if (++bit_index & 8)
+			if (!(bit_mask >>= 1))
 			{
 				// If data complete: exit and send this last bits
 				if (byte_index == sending_length)
 					break;
 				data_byte = send_buffer[byte_index++];
-				bit_index = 0;
+				bit_mask = 0x80;
 			}
 		}
 		else
