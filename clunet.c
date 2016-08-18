@@ -49,13 +49,13 @@ static void (*cbDataReceived)(uint8_t src_address, uint8_t command, char* data, 
 static void (*cbDataReceivedSniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
 /* Global static variables (RAM: 7 bytes) */
-static uint8_t readingState; // Current reading state
-static uint8_t sendingState = STATE_IDLE; // Current sending state
-static uint8_t readingPriority; // Receiving packet priority
-static uint8_t sendingPriority; // Sending priority (1 to 8)
-static uint8_t sendingLength; // Sending data length
-static uint8_t dominantTask; // Dominant task (bits)
-static uint8_t recessiveTask; // Recessive task (bits)
+static uint8_t reading_state; // Current reading state
+static uint8_t sending_state = STATE_IDLE; // Current sending state
+static uint8_t reading_priority; // Receiving packet priority
+static uint8_t sending_priority; // Sending priority (1 to 8)
+static uint8_t sending_length; // Sending data length
+static uint8_t dominant_task; // Dominant task (bits)
+static uint8_t recessive_task; // Recessive task (bits)
 
 /* Data buffers */
 static char sendBuffer[CLUNET_SEND_BUFFER_SIZE]; // Sending data buffer
@@ -99,7 +99,7 @@ process_received_packet(void)
 			while (1);
 		}
 
-		if (!sendingState || (sendingPriority <= CLUNET_PRIORITY_MESSAGE))
+		if (!sending_state || (sending_priority <= CLUNET_PRIORITY_MESSAGE))
 		{
 			switch (command)
 			{
@@ -132,23 +132,23 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	static uint8_t dataByte, byteIndex, bitIndex, numBits;
 	
 	// If in NOT ACTIVE state
-	if (!(sendingState & STATE_ACTIVE))
+	if (!(sending_state & STATE_ACTIVE))
 	{
 		// Reset reading state
-		readingState = STATE_IDLE;
+		reading_state = STATE_IDLE;
 		// If in IDLE state: disable timer output compare interrupt
-		if (!sendingState)
+		if (!sending_state)
 		{
 			CLUNET_DISABLE_TIMER_COMP;
 			return;
 		}
 		// If in WAIT_INTERFRAME state: starting sending throuth 1Т
-		sendingState = STATE_ACTIVE; // Set sending process to ACTIVE state
-		dataByte = sendingPriority - 1; // First need send priority (3 bits)
+		sending_state = STATE_ACTIVE; // Set sending process to ACTIVE state
+		dataByte = sending_priority - 1; // First need send priority (3 bits)
 		byteIndex = 0; // Data index
 		bitIndex = 5; // Priority bits position
 		numBits = 1; // Start bit
-		recessiveTask = 0; // Reset recessive task
+		recessive_task = 0; // Reset recessive task
 		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
 		return;
 	}
@@ -163,7 +163,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		if (bitIndex & 8)
 		{
 			CLUNET_DISABLE_TIMER_COMP;
-			sendingState = STATE_IDLE;
+			sending_state = STATE_IDLE;
 			return;
 		}
 	}
@@ -174,10 +174,10 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	else
 	{
 		// Check if we not been in reading ISR or first send cycle
-		if (recessiveTask)
+		if (recessive_task)
 		{
 			CLUNET_DISABLE_TIMER_COMP;
-			sendingState = STATE_WAIT_INTERFRAME;
+			sending_state = STATE_WAIT_INTERFRAME;
 			return;
 		}
 
@@ -187,7 +187,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		if (bitIndex & 8)
 		{
 			CLUNET_TIMER_REG_OCR += CLUNET_T;
-			dominantTask = 1;
+			dominant_task = 1;
 			return;
 		}
 	}
@@ -204,7 +204,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 			if (++bitIndex & 8)
 			{
 				// If data complete: exit and send this last bits
-				if (byteIndex == sendingLength)
+				if (byteIndex == sending_length)
 					break;
 				dataByte = sendBuffer[byteIndex++];
 				bitIndex = 0;
@@ -219,9 +219,9 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	CLUNET_TIMER_REG_OCR += CLUNET_T * numBits;
 
 	if (lineFree)
-		recessiveTask = numBits;
+		recessive_task = numBits;
 	else
-		dominantTask = numBits;
+		dominant_task = numBits;
 
 	// Bitstuff correction
 	numBits = (numBits == 5);
@@ -238,7 +238,7 @@ ISR(CLUNET_INT_VECTOR)
 	const uint8_t lineFree = CLUNET_READING ? 0 : 255;
 	uint8_t bitNum = 0; // Number of reading bits
 
-	if ((readingState & STATE_ACTIVE) || (sendingState & STATE_ACTIVE))
+	if ((reading_state & STATE_ACTIVE) || (sending_state & STATE_ACTIVE))
 	{
 		// Reading bits
 		const uint8_t ticks = now - lastTime;
@@ -253,15 +253,15 @@ ISR(CLUNET_INT_VECTOR)
 	}
 
 	// If sending is active
-	if (sendingState & STATE_ACTIVE)
+	if (sending_state & STATE_ACTIVE)
 	{
 		// Check for conflict on the line
-		if ((lineFree && (bitNum > dominantTask)) || (!lineFree && (bitNum < recessiveTask)))
+		if ((lineFree && (bitNum > dominant_task)) || (!lineFree && (bitNum < recessive_task)))
 		{
-			sendingState = recessiveTask = STATE_WAIT_INTERFRAME;
+			sending_state = recessive_task = STATE_WAIT_INTERFRAME;
 			goto _wait_interframe;
 		}
-		recessiveTask = 0; // Used as reading interrupt flag
+		recessive_task = 0; // Used as reading interrupt flag
 	}
 	// If sending not active
 	else
@@ -283,11 +283,11 @@ _wait_interframe:
 	{
 		lastTime = now; // Update time value
 		// If reading in IDLE state - start reading process
-		if (!readingState)
+		if (!reading_state)
 		{
-			dataByte = readingPriority = byteIndex = crc = 0;
-			recessiveTask = bitStuff = 1;
-			readingState = STATE_ACTIVE;
+			dataByte = reading_priority = byteIndex = crc = 0;
+			recessive_task = bitStuff = 1;
+			reading_state = STATE_ACTIVE;
 			bitIndex = 5;
 			return;
 		}
@@ -295,10 +295,10 @@ _wait_interframe:
 
 	// On error reading bits
 	if (!bitNum)
-		readingState = STATE_WAIT_INTERFRAME;
+		reading_state = STATE_WAIT_INTERFRAME;
 
 	// Exit if reading is NOT ACTIVE
-	if (!(readingState & STATE_ACTIVE))
+	if (!(reading_state & STATE_ACTIVE))
 		return;
 
 	const uint8_t mask = (0xFF >> bitIndex);
@@ -316,18 +316,18 @@ _wait_interframe:
 	// Whole byte readed
 	if (bitIndex & 8)
 	{
-		if (readingPriority)
+		if (reading_priority)
 			readBuffer[byteIndex++] = dataByte;
 		else
-			readingPriority = dataByte + 1;
+			reading_priority = dataByte + 1;
 
 		// Whole packet readed
 		if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > RECEIVED_DATA_SIZE + CLUNET_OFFSET_DATA))
 		{
 			// Packet from another device, line is busy
-			if (/*!recessiveTask ||*/ !check_crc(readBuffer, byteIndex))
+			if (/*!recessive_task ||*/ !check_crc(readBuffer, byteIndex))
 				process_received_packet();
-			readingState = STATE_WAIT_INTERFRAME;
+			reading_state = STATE_WAIT_INTERFRAME;
 		}
 		
 		// Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс
@@ -339,7 +339,7 @@ _wait_interframe:
 		
 		// Иначе ошибка: нехватка приемного буфера -> игнорируем пакет
 		else
-			readingState = STATE_WAIT_INTERFRAME;
+			reading_state = STATE_WAIT_INTERFRAME;
 	}
 
 	/* Проверка на битстаффинг, учитываем в следующем цикле */
@@ -350,14 +350,14 @@ _wait_interframe:
 void
 clunet_init(void)
 {
-	sendingLength = MCUSR; // Используем переменную sendingLength для отправки содержимого регистра MCUSR
+	sending_length = MCUSR; // Используем переменную sending_length для отправки содержимого регистра MCUSR
 	MCUSR = 0;
 	wdt_disable();
 	CLUNET_TIMER_INIT;
 	CLUNET_PIN_INIT;
 	CLUNET_INT_INIT;
 	// Start with WAIT_INTERFRAME state
-	readingState = STATE_WAIT_INTERFRAME;
+	reading_state = STATE_WAIT_INTERFRAME;
 	// If line is free, then planning reset reading state
 	if (!CLUNET_READING)
 	{
@@ -369,8 +369,8 @@ clunet_init(void)
 		CLUNET_BROADCAST_ADDRESS,
 		CLUNET_PRIORITY_MESSAGE,
 		CLUNET_COMMAND_BOOT_COMPLETED,
-		(char*)&sendingLength,
-		sizeof(sendingLength)
+		(char*)&sending_length,
+		sizeof(sending_length)
 	);
 }
 
@@ -380,15 +380,15 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 	/* Если размер данных в пределах буфера передачи (максимально для протокола 250 байт) */
 	if (size < (CLUNET_SEND_BUFFER_SIZE - CLUNET_OFFSET_DATA))
 	{
-		if (sendingState)
+		if (sending_state)
 		{
 			CLUNET_DISABLE_TIMER_COMP;
-			sendingState = STATE_IDLE;
+			sending_state = STATE_IDLE;
 			CLUNET_SEND_0;
 		}
 		
 		/* Заполняем переменные */
-		sendingPriority = (prio > 8) ? 8 : prio ? : 1;
+		sending_priority = (prio > 8) ? 8 : prio ? : 1;
 		sendBuffer[CLUNET_OFFSET_SRC_ADDRESS] = CLUNET_DEVICE_ID;
 		sendBuffer[CLUNET_OFFSET_DST_ADDRESS] = address;
 		sendBuffer[CLUNET_OFFSET_COMMAND] = command;
@@ -405,7 +405,7 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 		
 		sendBuffer[CLUNET_OFFSET_DATA + size] = check_crc(sendBuffer, CLUNET_OFFSET_DATA + size);
 		
-		sendingLength = size + CLUNET_OFFSET_DATA + 1;
+		sending_length = size + CLUNET_OFFSET_DATA + 1;
 		
 		clunet_resend_last_packet();
 	}
@@ -416,19 +416,19 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 uint8_t
 clunet_ready_to_send(void)
 {
-	return sendingState ? sendingPriority : 0;
+	return sending_state ? sending_priority : 0;
 }
 
 void
 clunet_resend_last_packet(void)
 {
 	// If sending in IDLE state
-	if (!sendingState)
+	if (!sending_state)
 	{
-		sendingState = STATE_WAIT_INTERFRAME; // Set sending to WAIT_INTERFRAME state
+		sending_state = STATE_WAIT_INTERFRAME; // Set sending to WAIT_INTERFRAME state
 	
 		// If ready to reading: start sending as soon as possible
-		if (!readingState)
+		if (!reading_state)
 		{
 			CLUNET_ENABLE_TIMER_COMP;
 			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG;
