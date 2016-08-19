@@ -128,7 +128,7 @@ process_received_packet(void)
 ISR(CLUNET_TIMER_COMP_VECTOR)
 {
 	// Static variables
-	static uint8_t data_byte, byte_index, bit_mask, bit_task;
+	static uint8_t data_byte, byte_index, bit_mask, bit_task, crc;
 	
 	// If in NOT ACTIVE state
 	if (!(sending_state & STATE_ACTIVE))
@@ -148,6 +148,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		bit_mask = 0x04; // Init bit mask by priority MSB location
 		bit_task = 1; // Start bit
 		recessive_task = 0; // Reset recessive task
+		crc = 0; // Reset CRC value
 		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
 		return;
 	}
@@ -204,13 +205,18 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		// If sending byte complete: reset bit index and get next byte to send
 		if (!(bit_mask >>= 1))
 		{
-			// If data complete: exit and send this last bits
-			if (byte_index == sending_length)
+			if (byte_index < sending_length)
+			{
+				data_byte = send_buffer[byte_index];
+				crc = _crc_ibutton_update(crc, data_byte);
+			}
+			else if (byte_index == sending_length)
+				data_byte = crc;
+			else
 				break;
-			data_byte = send_buffer[byte_index++];
 			bit_mask = 0x80;
+			byte_index++;
 		}
-
 	}
 	while (bit_task < 5);
 	
@@ -405,9 +411,9 @@ clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, co
 			while (++idx < size);
 		}
 		
-		send_buffer[CLUNET_OFFSET_DATA + size] = check_crc(send_buffer, CLUNET_OFFSET_DATA + size);
+//		send_buffer[CLUNET_OFFSET_DATA + size] = check_crc(send_buffer, CLUNET_OFFSET_DATA + size);
 		
-		sending_length = size + CLUNET_OFFSET_DATA + 1;
+		sending_length = size + CLUNET_OFFSET_DATA;
 		
 		clunet_resend_last_packet();
 	}
