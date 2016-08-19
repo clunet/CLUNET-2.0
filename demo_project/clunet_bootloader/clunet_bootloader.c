@@ -152,26 +152,25 @@ static void
 send(const uint8_t* data, const uint8_t size)
 {
 
-	uint8_t bit_task, bit_mask, byte_index;
-
 _repeat:
 
 	// Ждем освобождения линии и межкадровое пространство 8Т в блокирующем режиме (в конце концов замкнутая накоротко линия это ненормально)
 	wait_interframe();
 	CLUNET_SEND_1;
-	bit_task = 4; // Начинаем с посылки 4 бит (стартовый и 3 бита приоритета)
+	uint8_t line_pullup, byte_index, crc;
+	line_pullup = byte_index = crc = 0;
 	uint8_t data_byte = data[0];
-	byte_index = 0;
-	bit_mask = 0x80;
-	uint8_t crc = 0;
-	uint8_t line_pullup = 0;
+	uint8_t bit_task = 4;
+	uint8_t bit_mask = 0x80;
+
+
 	do
 	{
 		CLUNET_TIMER_REG = 0;
 		do
 		{
 			const uint8_t bit_value = data_byte & bit_mask;
-			if (((line_pullup & 1) && bit_value) || (!(line_pullup & 1) && !bit_value))
+			if ((line_pullup && bit_value) || (!line_pullup && !bit_value))
 				break;
 			
 			bit_task++;
@@ -196,7 +195,7 @@ _repeat:
 		{
 			const uint8_t now = CLUNET_TIMER_REG;
 			delta = stop - now;
-			if ((line_pullup & 1) && (now > max_delta) && CLUNET_READING)
+			if (line_pullup && (now > max_delta) && CLUNET_READING)
 			{
 				if (delta > max_delta)
 					goto _repeat;
@@ -205,17 +204,19 @@ _repeat:
 		}
 		while (delta);
 
-		if (line_pullup ^= 1)
+		line_pullup = ~line_pullup;
+
+		if (line_pullup)
 			CLUNET_SEND_0;
 		else
 			CLUNET_SEND_1;
 
 		bit_task = (bit_task == 5);
 	}
-	while (!bit_mask);
+	while (bit_mask);
 
 	// Если линию на финише прижали, то через 1Т отпустим ее
-	if (!(line_pullup & 1))
+	if (!line_pullup)
 	{
 		PAUSE(1);
 		CLUNET_SEND_0;
