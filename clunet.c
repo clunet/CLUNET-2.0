@@ -195,24 +195,24 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 	do
 	{
 		const uint8_t bit_value = data_byte & bit_mask;
-		if ((line_pullup && !bit_value) || (!line_pullup && bit_value))
-		{
-			bit_task++;
 
-			// If sending byte complete: reset bit index and get next byte to send
-			if (!(bit_mask >>= 1))
-			{
-				// If data complete: exit and send this last bits
-				if (byte_index == sending_length)
-					break;
-				data_byte = send_buffer[byte_index++];
-				bit_mask = 0x80;
-			}
-		}
-		else
+		if ((line_pullup && bit_value) || (!line_pullup && !bit_value))
 			break;
+
+		bit_task++;
+
+		// If sending byte complete: reset bit index and get next byte to send
+		if (!(bit_mask >>= 1))
+		{
+			// If data complete: exit and send this last bits
+			if (byte_index == sending_length)
+				break;
+			data_byte = send_buffer[byte_index++];
+			bit_mask = 0x80;
+		}
+
 	}
-	while (bit_task != 5);
+	while (bit_task < 5);
 	
 	// Update OCR
 	CLUNET_TIMER_REG_OCR += CLUNET_T * bit_task;
