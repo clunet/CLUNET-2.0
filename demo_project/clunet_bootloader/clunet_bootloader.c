@@ -152,51 +152,51 @@ static void
 send(const uint8_t* data, const uint8_t size)
 {
 
-	uint8_t numBits, bitIndex, byteIndex;
+	uint8_t bit_task, bit_mask, byte_index;
 
 _repeat:
 
 	// Ждем освобождения линии и межкадровое пространство 8Т в блокирующем режиме (в конце концов замкнутая накоротко линия это ненормально)
 	wait_interframe();
 	CLUNET_SEND_1;
-	numBits = 4; // Начинаем с посылки 4 бит (стартовый и 3 бита приоритета)
-	byteIndex = bitIndex = 0;
-	uint8_t sendingByte = data[0];
+	bit_task = 4; // Начинаем с посылки 4 бит (стартовый и 3 бита приоритета)
+	uint8_t data_byte = data[0];
+	byte_index = 0;
+	bit_mask = 0x80;
 	uint8_t crc = 0;
-	uint8_t lineFree = 0; // Битовая маска для целей подсчета бит и получения текущего состояния линии
+	uint8_t line_pullup = 0;
 	do
 	{
 		CLUNET_TIMER_REG = 0;
-		while (((sendingByte << bitIndex) & 0x80) ^ lineFree)
+		do
 		{
-			numBits++;
-			if (++bitIndex & 8)
-			{
-				if (byteIndex < size)
-				{
-					sendingByte = data[byteIndex];
-					crc = _crc_ibutton_update(crc, sendingByte);
-				}
-				
-				else if (byteIndex == size)
-					sendingByte = crc;
-				// Данные закончились. Выходим.
-				else
-					break;
-				bitIndex = 0;
-				byteIndex++;
-			}
-			if (numBits == 5)
+			const uint8_t bit_value = data_byte & bit_mask;
+			if (((line_pullup & 1) && bit_value) || (!(line_pullup & 1) && !bit_value))
 				break;
+			
+			bit_task++;
+			
+			if (!(bit_mask >>= 1))
+			{
+				crc = _crc_ibutton_update(crc, data_byte);
+				if (++byte_index < size)
+					data_byte = data[byte_index];
+				else if (byte_index == size)
+					data_byte = crc;
+				else break;
+				bit_mask = 0x80;
+			}
 		}
+		while (bit_task < 5);
+
 		// Задержка по количеству передаваемых бит и проверка на конфликт с синхронизацией при передаче
 		uint8_t delta;
-		const uint8_t stop = numBits * CLUNET_T;
+		const uint8_t stop = bit_task * CLUNET_T;
 		do
 		{
 			const uint8_t now = CLUNET_TIMER_REG;
 			delta = stop - now;
-			if (lineFree && now > max_delta && CLUNET_READING)
+			if ((line_pullup & 1) && (now > max_delta) && CLUNET_READING)
 			{
 				if (delta > max_delta)
 					goto _repeat;
@@ -205,17 +205,17 @@ _repeat:
 		}
 		while (delta);
 
-		if (lineFree ^= 0x80)
+		if (line_pullup ^= 1)
 			CLUNET_SEND_0;
 		else
 			CLUNET_SEND_1;
 
-		numBits = (numBits == 5);
+		bit_task = (bit_task == 5);
 	}
-	while (byteIndex <= size);
+	while (!bit_mask);
 
 	// Если линию на финише прижали, то через 1Т отпустим ее
-	if (!lineFree)
+	if (!(line_pullup & 1))
 	{
 		PAUSE(1);
 		CLUNET_SEND_0;
