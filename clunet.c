@@ -125,10 +125,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		reading_state = STATE_IDLE;
 		// If in IDLE state: disable timer output compare interrupt
 		if (!sending_state)
-		{
-			CLUNET_DISABLE_TIMER_COMP;
-			return;
-		}
+			goto _disable_oci;
 		// If in WAIT_INTERFRAME state: starting sending throuth 1Т
 		sending_state = STATE_ACTIVE; // Set sending process to ACTIVE state
 		data_byte = sending_priority - 1; // First need send priority (3 bits)
@@ -137,8 +134,7 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		bit_task = 1; // Start bit
 		recessive_task = 0; // Reset recessive task
 		crc = 0; // Reset CRC value
-		CLUNET_TIMER_REG_OCR += CLUNET_T; // 1T delay
-		return;
+		goto _delay_1t;
 	}
 	
 	const uint8_t line_pullup = CLUNET_SENDING;
@@ -150,9 +146,8 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		// If data sending complete
 		if (!bit_mask)
 		{
-			CLUNET_DISABLE_TIMER_COMP;
 			sending_state = STATE_IDLE;
-			return;
+			goto _disable_oci;
 		}
 	}
 
@@ -164,8 +159,9 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		// Check if we not been in reading ISR or first send cycle
 		if (recessive_task)
 		{
-			CLUNET_DISABLE_TIMER_COMP;
 			sending_state = STATE_WAIT_INTERFRAME;
+_disable_oci:
+			CLUNET_DISABLE_TIMER_COMP;
 			return;
 		}
 
@@ -174,8 +170,9 @@ ISR(CLUNET_TIMER_COMP_VECTOR)
 		// If data sending complete
 		if (!bit_mask)
 		{
-			CLUNET_TIMER_REG_OCR += CLUNET_T;
 			dominant_task = 1;
+_delay_1t:
+			CLUNET_TIMER_REG_OCR += CLUNET_T;
 			return;
 		}
 	}
