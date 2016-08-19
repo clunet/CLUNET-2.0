@@ -20,6 +20,7 @@ SOFTWARE.
 
 #include <avr/boot.h>
 #include <avr/interrupt.h>
+#include <util/crc16.h>
 #include "clunet.h"
 
 #define COMMAND_FIRMWARE_UPDATE_START	0	// Информируем сеть, что мы в загрузчике
@@ -147,37 +148,11 @@ read_signal(const uint8_t signal)
 	return bitNum;
 }
 
-/* Функция нахождения контрольной суммы Maxim iButton 8-bit */
-static uint8_t
-check_crc(const uint8_t* data, const uint8_t size)
-{
-      uint8_t crc = 0;
-      uint8_t a = 0;
-      do
-      {
-            uint8_t b = 8;
-            uint8_t inbyte = data[a];
-            do
-            {
-                  const uint8_t mix = crc ^ inbyte;
-                  crc >>= 1;
-                  if (mix & 1)
-                  	crc ^= 0x8C;
-                  inbyte >>= 1;
-            }
-            while (--b);
-      }
-      while (++a < size);
-      return crc;
-}
-
 static void
 send(const uint8_t* data, const uint8_t size)
 {
 
 	uint8_t numBits, bitIndex, byteIndex;
-
-	const uint8_t crc = check_crc(data, size);
 
 _repeat:
 
@@ -187,28 +162,34 @@ _repeat:
 	numBits = 4; // Начинаем с посылки 4 бит (стартовый и 3 бита приоритета)
 	byteIndex = bitIndex = 0;
 	uint8_t sendingByte = data[0];
+	uint8_t crc = 0;
 	uint8_t lineFree = 0; // Битовая маска для целей подсчета бит и получения текущего состояния линии
 	do
 	{
+		CLUNET_TIMER_REG = 0;
 		while (((sendingByte << bitIndex) & 0x80) ^ lineFree)
 		{
 			numBits++;
 			if (++bitIndex & 8)
 			{
-				if (++byteIndex < size)
+				if (byteIndex < size)
+				{
 					sendingByte = data[byteIndex];
+					crc = _crc_ibutton_update(crc, sendingByte);
+				}
+				
 				else if (byteIndex == size)
 					sendingByte = crc;
 				// Данные закончились. Выходим.
 				else
 					break;
 				bitIndex = 0;
+				byteIndex++;
 			}
 			if (numBits == 5)
 				break;
 		}
 		// Задержка по количеству передаваемых бит и проверка на конфликт с синхронизацией при передаче
-		CLUNET_TIMER_REG = 0;
 		uint8_t delta;
 		const uint8_t stop = numBits * CLUNET_T;
 		do
@@ -270,6 +251,7 @@ read(void)
 		uint8_t bitIndex, bitStuff;
 		uint8_t byteIndex = 0;
 		uint8_t lineFree = buffer[0] = 0xFF;
+		uint8_t crc = 0;
 
 		bitIndex = bitStuff = bitNum & 1; // Если приняли 5 бит, то битовый индекс и битстаффинг = 1, иначе 0;
 
@@ -278,50 +260,48 @@ read(void)
 		
 			bitNum = read_signal(lineFree);
 			
-			if (bitNum)
+			if (!bitNum)
+				return 0;
+
+			lineFree = ~lineFree;
+
+			const uint8_t mask = 0xFF >> bitIndex;
+				
+			if (lineFree)
+				buffer[byteIndex] |= mask;
+			else
+				buffer[byteIndex] &= ~mask;
+
+			// Обновим битовый индекс с учетом битстаффинга
+			bitIndex += bitNum - bitStuff;
+
+			if (bitIndex & 8)
 			{
-				lineFree = ~lineFree;
+				crc = _crc_ibutton_update(crc, buffer[byteIndex++]);
 
-				const uint8_t mask = 0xFF >> bitIndex;
-				
-				if (lineFree)
-					buffer[byteIndex] |= mask;
-				else
-					buffer[byteIndex] &= ~mask;
+				/* Пакет прочитан полностью, выходим из цикла, проверяем и возвращаем управление */
+				if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > buffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
+					break;
 
-				// Обновим битовый индекс с учетом битстаффинга
-				bitIndex += bitNum - bitStuff;
-
-				if (bitIndex & 8)
+				/* Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс */
+				else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
 				{
-					/* Пакет прочитан полностью, выходим из цикла, проверяем и возвращаем управление */
-					if ((++byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > buffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
-						break;
-
-					/* Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс */
-					else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
-					{
-						bitIndex &= 7;
-						buffer[byteIndex] = lineFree;
-					}
-
-					/* Иначе ошибка: нехватка приемного буфера -> игнорируем пакет */
-					else
-						return 0;
-				
+					bitIndex &= 7;
+					buffer[byteIndex] = lineFree;
 				}
 
-				// Смотрим надо ли применять битстаффинг
-				bitStuff = (bitNum == 5);
-
+				/* Иначе ошибка: нехватка приемного буфера -> игнорируем пакет */
+				else
+					return 0;
+				
 			}
-			else
-				return 0;
+
+			// Смотрим надо ли применять битстаффинг
+			bitStuff = (bitNum == 5);
 		}
 		// Пакет принят
-		if ((buffer[CLUNET_OFFSET_DST_ADDRESS] == CLUNET_DEVICE_ID) && (RECEIVED_COMMAND == CLUNET_COMMAND_BOOT_CONTROL)
-			&& (!check_crc(buffer, byteIndex)))
-				return byteIndex;
+		if (!crc && (buffer[CLUNET_OFFSET_DST_ADDRESS] == CLUNET_DEVICE_ID) && (RECEIVED_COMMAND == CLUNET_COMMAND_BOOT_CONTROL))
+			return byteIndex;
 	}
 
 	return 0;
