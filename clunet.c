@@ -64,18 +64,6 @@ static char read_buffer[CLUNET_READ_BUFFER_SIZE]; // Reading data buffer
  static const char device_name[] = CLUNET_DEVICE_NAME; // Simple and short device name
 #endif
 
-/* Function for calculate Maxim iButton 8-bit checksum */
-static char
-check_crc(const char* data, const uint8_t size)
-{
-	uint8_t crc = 0;
-	uint8_t a = 0;
-	do
-		crc = _crc_ibutton_update(crc, data[a]);
-	while (++a < size);
-	return crc;
-}
-
 /* Function for process receiving packet */
 static void
 process_received_packet(void)
