@@ -77,7 +77,7 @@ update_init_response[6] =	{
 const uint8_t max_delta = (uint8_t)((float)CLUNET_T * 0.3f);
 
 static uint8_t
-ibutton_crc(uint8_t* data, uint8_t size)
+ibutton_crc(const uint8_t* data, const uint8_t size)
 {
 	uint8_t crc = 0;
 	uint8_t idx = 0;
