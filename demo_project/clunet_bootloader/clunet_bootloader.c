@@ -76,6 +76,15 @@ update_init_response[6] =	{
 // Максимально допустимая рассинхронизация между устройствами сети
 const uint8_t max_delta = (uint8_t)((float)CLUNET_T * 0.3f);
 
+static uint8_t
+ibutton_crc(uint8_t* data, uint8_t size)
+{
+	uint8_t crc = 0;
+	uint8_t idx = 0;
+	while (idx < size)
+		crc = _crc_ibutton_update(crc, data[idx++]);
+	return crc;
+}
 
 /*	Функция ожидания межкадрового интервала длительностью 8Т.
 	Блокирует управление до обнаружения интервала или начала передачи от другого устройства в пределах допустимой рассинхронизации.
@@ -151,42 +160,34 @@ read_signal(const uint8_t signal)
 static void
 send(const uint8_t* data, const uint8_t size)
 {
-
+	const uint8_t crc = ibutton_crc(data, size);
 _repeat:
-
 	// Ждем освобождения линии и межкадровое пространство 8Т в блокирующем режиме (в конце концов замкнутая накоротко линия это ненормально)
 	wait_interframe();
 	CLUNET_SEND_1;
-	uint8_t line_pullup, byte_index, crc;
-	line_pullup = byte_index = crc = 0;
-	uint8_t data_byte = data[0];
+	uint8_t bit_index, byte_index, line_pullup;
+	bit_index = byte_index = line_pullup = 0;
+	uint8_t data_byte = *data;
 	uint8_t bit_task = 4;
-	uint8_t bit_mask = 0x80;
-
 
 	do
 	{
-		CLUNET_TIMER_REG = 0;
-		do
+		CLUNET_TIMER_REG = 0; // Reset timer
+		while (((data_byte << bit_index) & 0x80) ^ line_pullup)
 		{
-			const uint8_t bit_value = data_byte & bit_mask;
-			if ((line_pullup && bit_value) || (!line_pullup && !bit_value))
-				break;
-			
 			bit_task++;
-			
-			if (!(bit_mask >>= 1))
+			if (++bit_index & 8)
 			{
-				crc = _crc_ibutton_update(crc, data_byte);
 				if (++byte_index < size)
 					data_byte = data[byte_index];
 				else if (byte_index == size)
 					data_byte = crc;
-				else break;
-				bit_mask = 0x80;
+				else break; // End of data
+				bit_index = 0;
 			}
+			if (bit_task == 5)
+				break;
 		}
-		while (bit_task < 5);
 
 		// Задержка по количеству передаваемых бит и проверка на конфликт с синхронизацией при передаче
 		uint8_t delta;
@@ -204,16 +205,14 @@ _repeat:
 		}
 		while (delta);
 
-		line_pullup = ~line_pullup;
-
-		if (line_pullup)
+		if (line_pullup ^= 0x80)
 			CLUNET_SEND_0;
 		else
 			CLUNET_SEND_1;
 
 		bit_task = (bit_task == 5);
 	}
-	while (bit_mask);
+	while (!(bit_index & 8));
 
 	// Если линию на финише прижали, то через 1Т отпустим ее
 	if (!line_pullup)
@@ -221,7 +220,6 @@ _repeat:
 		PAUSE(1);
 		CLUNET_SEND_0;
 	}
-
 }
 
 /*
@@ -243,68 +241,56 @@ read(void)
 	if (wait_for_start())
 		return 0;
 	// Читаем доминантные биты
-	uint8_t bitNum = read_signal(0);
-	
-	// Если биты доминантные и их не менее 4 (стартовый + 3 бита приоритета), то этот пакет нам подходит, начнем прием и разбор
-	if (bitNum & 4)
+	uint8_t num_bits = read_signal(0);
+	if (!(num_bits & 4))
+		return 0;
+
+	uint8_t bit_index, bit_stuff;
+	bit_index = bit_stuff = num_bits & 1; // Если приняли 5 бит, то битовый индекс и битстаффинг = 1, иначе 0;
+	uint8_t byte_index = 0;
+	uint8_t line_pullup = buffer[0] = 255;
+
+	while (1)
 	{
-	
-		uint8_t bitIndex, bitStuff;
-		uint8_t byteIndex = 0;
-		uint8_t lineFree = buffer[0] = 0xFF;
-		uint8_t crc = 0;
-
-		bitIndex = bitStuff = bitNum & 1; // Если приняли 5 бит, то битовый индекс и битстаффинг = 1, иначе 0;
-
-		while (1)
-		{
-		
-			bitNum = read_signal(lineFree);
+		num_bits = read_signal(line_pullup);
 			
-			if (!bitNum)
-				return 0;
+		if (!num_bits)
+			return 0;
 
-			lineFree = ~lineFree;
+		const uint8_t mask = 255 >> bit_index;
+		line_pullup = ~line_pullup;
+		if (line_pullup)
+			buffer[byte_index] |= mask;
+		else
+			buffer[byte_index] &= ~mask;
 
-			const uint8_t mask = 0xFF >> bitIndex;
-				
-			if (lineFree)
-				buffer[byteIndex] |= mask;
-			else
-				buffer[byteIndex] &= ~mask;
+		// Обновим битовый индекс с учетом битстаффинга
+		bit_index += num_bits - bit_stuff;
 
-			// Обновим битовый индекс с учетом битстаффинга
-			bitIndex += bitNum - bitStuff;
-
-			if (bitIndex & 8)
-			{
-				crc = _crc_ibutton_update(crc, buffer[byteIndex++]);
-
-				/* Пакет прочитан полностью, выходим из цикла, проверяем и возвращаем управление */
-				if ((byteIndex > CLUNET_OFFSET_SIZE) && (byteIndex > buffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
-					break;
+		if (bit_index & 8)
+		{
+			/* Пакет прочитан полностью, выходим из цикла, проверяем и возвращаем управление */
+			if ((++byte_index > CLUNET_OFFSET_SIZE) && (byte_index > buffer[CLUNET_OFFSET_SIZE] + CLUNET_OFFSET_DATA))
+				break;
 
 				/* Если данные прочитаны не полностью и мы не выходим за пределы буфера, то присвоим очередной байт и подготовим битовый индекс */
-				else if (byteIndex < CLUNET_READ_BUFFER_SIZE)
-				{
-					bitIndex &= 7;
-					buffer[byteIndex] = lineFree;
-				}
-
-				/* Иначе ошибка: нехватка приемного буфера -> игнорируем пакет */
-				else
-					return 0;
-				
+			else if (byte_index < CLUNET_READ_BUFFER_SIZE)
+			{
+				bit_index &= 7;
+				buffer[byte_index] = line_pullup;
 			}
 
-			// Смотрим надо ли применять битстаффинг
-			bitStuff = (bitNum == 5);
+			/* Иначе ошибка: нехватка приемного буфера -> игнорируем пакет */
+			else return 0;
 		}
-		// Пакет принят
-		if (!crc && (buffer[CLUNET_OFFSET_DST_ADDRESS] == CLUNET_DEVICE_ID) && (RECEIVED_COMMAND == CLUNET_COMMAND_BOOT_CONTROL))
-			return byteIndex;
-	}
 
+		// Смотрим надо ли применять битстаффинг
+		bit_stuff = (num_bits == 5);
+	}
+	// Пакет принят
+	if ((buffer[CLUNET_OFFSET_DST_ADDRESS] == CLUNET_DEVICE_ID) && (RECEIVED_COMMAND == CLUNET_COMMAND_BOOT_CONTROL)
+		&& !ibutton_crc(buffer, byte_index))
+			return byte_index;
 	return 0;
 }
 
