@@ -48,7 +48,7 @@ static void (*cb_data_received)(uint8_t src_address, uint8_t command, char* data
 static void (*cb_data_received_sniff)(uint8_t src_address, uint8_t dst_address, uint8_t command, char* data, uint8_t size) = 0;
 
 /* Global static variables (RAM: 7 bytes) */
-static uint8_t reading_state; // Current reading state
+static uint8_t reading_state = STATE_WAIT_INTERFRAME; // Current reading state
 static uint8_t sending_state = STATE_IDLE; // Current sending state
 static uint8_t reading_priority; // Receiving packet priority
 static uint8_t sending_priority; // Sending priority (1 to 8)
@@ -343,21 +343,25 @@ _wait_interframe:
 void
 clunet_init(void)
 {
+
 	sending_length = MCUSR; // Используем переменную sending_length для отправки содержимого регистра MCUSR
 	MCUSR = 0;
+
 	wdt_disable();
+
 	CLUNET_TIMER_INIT;
 	CLUNET_PIN_INIT;
 	CLUNET_INT_INIT;
-	// Start with WAIT_INTERFRAME state
-	reading_state = STATE_WAIT_INTERFRAME;
+
 	// If line is free, then planning reset reading state
 	if (!CLUNET_READING)
 	{
 		CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7 * CLUNET_T - 1);
 		CLUNET_ENABLE_TIMER_COMP;
 	}
+
 	sei(); // Enable global interrupts
+
 	clunet_send (
 		CLUNET_BROADCAST_ADDRESS,
 		CLUNET_PRIORITY_MESSAGE,
@@ -419,22 +423,13 @@ clunet_resend_last_packet(void)
 	if (!sending_state)
 	{
 		sending_state = STATE_WAIT_INTERFRAME; // Set sending to WAIT_INTERFRAME state
-	
+
 		// If ready to reading: start sending as soon as possible
 		if (!reading_state)
 		{
 			CLUNET_ENABLE_TIMER_COMP;
 			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG;
 		}
-
-		else if (!CLUNET_READING)
-		{
-			CLUNET_TIMER_REG_OCR = CLUNET_TIMER_REG + (7 * CLUNET_T - 1);
-			CLUNET_ENABLE_TIMER_COMP;
-		}
-
-		else
-			CLUNET_DISABLE_TIMER_COMP;
 	}
 }
 
