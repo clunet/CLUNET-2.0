@@ -114,6 +114,9 @@ uint8_t clunet_ready_to_send(void);
 // Resend last sended packet
 void clunet_resend_last_packet(void);
 
+// Abort current sending
+void clunet_abort_send(void);
+
 // Отправка пакета
 void clunet_send(const uint8_t address, const uint8_t prio, const uint8_t command, const char* data, const uint8_t size);
 
