@@ -58,10 +58,12 @@ SOFTWARE.
 #define CLUNET_TIMER_OVERFLOW (TIFR & (1 << TOV2))
 // Reset Overflow Flag Command (used in bootloader only)
 #define CLUNET_TIMER_OVERFLOW_CLEAR { TIFR = (1 << TOV2); }
+// Reset Output Compare Flag Command
+#define CLUNET_CLEAR_OCF { TIFR = (1 << OCF2); }
 // Enable timer compare interrupt (reset output compare flag & enable interrupt)
-#define CLUNET_ENABLE_TIMER_COMP { TIFR = (1 << OCF2); TIMSK |= (1 << OCIE2); }
+#define CLUNET_ENABLE_OCI { TIMSK |= (1 << OCIE2); }
 // Disable timer compare interrupt
-#define CLUNET_DISABLE_TIMER_COMP { TIMSK &= ~(1 << OCIE2); }
+#define CLUNET_DISABLE_OCI { TIMSK &= ~(1 << OCIE2); }
 
 /* End of Timer/Counter definitions */
 
