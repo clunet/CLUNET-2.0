@@ -249,7 +249,7 @@ ISR(CLUNET_INT_VECTOR)
 	if (sending_state & STATE_ACTIVE)
 	{
 		// Check for conflict on the line
-		if ((front_edge && (num_bits > dominant_task)) || (!front_edge && !CLUNET_SENDING && ((int8_t)(CLUNET_TIMER_REG_OCR - now) >= (CLUNET_T / 2))))
+		if ((front_edge && (num_bits > dominant_task)) || (!front_edge && !CLUNET_SENDING && (CLUNET_TIMER_REG_OCR - now >= (int8_t)(CLUNET_T / 2))))
 		{
 			sending_state = STATE_WAIT_INTERFRAME;
 			goto _wait_interframe;
