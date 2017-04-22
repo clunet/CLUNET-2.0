@@ -33,9 +33,12 @@ SOFTWARE.
 #define CLUNET_SEND_BUFFER_SIZE 128
 #define CLUNET_READ_BUFFER_SIZE 128
 
-/* MCUs pin, external interrupt with any logical change is required! */
-#define CLUNET_PORT D
-#define CLUNET_PIN 2
+/* MCUs write pin */
+#define CLUNET_WRITE_PORT D
+#define CLUNET_WRITE_PIN 4
+/* MCUs read pin, external interrupt with any logical change is required! */
+#define CLUNET_READ_PORT D
+#define CLUNET_READ_PIN 2
 
 /*
 	Custom T (T >= 8 && T <= 24).
